@@ -431,7 +431,7 @@ Buyer sets up standing order (products + frequency)
 ├── docs/
 │   ├── api/                  # OpenAPI spec
 │   └── architecture/
-├── plan.md                   # This file
+├── PLAN.md                   # This file
 └── README.md
 ```
 

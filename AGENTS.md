@@ -6,7 +6,7 @@
 
 A two-sided B2B marketplace connecting coffee shop owners (**buyers**) with product dealers/distributors (**suppliers**). Buyers browse catalogs, place one-time or recurring orders, and track deliveries. Suppliers manage listings, fulfill orders, and invoice clients.
 
-- **Full architecture & product plan:** [`plan.md`](./plan.md) — read before making design decisions.
+- **Full architecture & product plan:** [`PLAN.md`](./PLAN.md) — read before making design decisions.
 - **Task list:** [`TODO.md`](./TODO.md) — what to work on, in order.
 - **Progress log:** [`PROGRESS.md`](./PROGRESS.md) — check before starting, update when done.
 
@@ -47,7 +47,7 @@ A two-sided B2B marketplace connecting coffee shop owners (**buyers**) with prod
 ├── prisma/           # schema.prisma + migrations
 ├── infra/            # docker-compose, k8s, terraform
 ├── docs/             # api/ (OpenAPI), architecture/
-├── plan.md           # Product + architecture plan (read-only reference)
+├── PLAN.md           # Product + architecture plan (read-only reference)
 ├── TODO.md           # Task backlog with statuses
 ├── PROGRESS.md       # Progress log — MUST be updated
 └── AGENTS.md         # This file
@@ -113,14 +113,14 @@ Invoice is auto-generated when an order is marked `delivered`.
 
 ## Workflow for Agents
 
-1. Read `plan.md` (sections relevant to your task), `TODO.md`, and the last entry in `PROGRESS.md`.
+1. Read `PLAN.md` (sections relevant to your task), `TODO.md`, and the last entry in `PROGRESS.md`.
 2. Pick the **first unchecked task** in `TODO.md` (respect dependencies/order). Do not jump ahead to later phases.
 3. Mark the task `in_progress` in `TODO.md` **before** starting work.
-4. Implement following the conventions above. MVP scope only — see Phase 1 in `plan.md` §9. Do not build Phase 2/3 features early (no Stripe, no messaging, no mobile, no reviews in MVP unless tasked).
+4. Implement following the conventions above. MVP scope only — see Phase 1 in `PLAN.md` §9. Do not build Phase 2/3 features early (no Stripe, no messaging, no mobile, no reviews in MVP unless tasked).
 5. Verify: `pnpm lint && pnpm typecheck && pnpm test` (run what exists).
 6. Mark the task done `[x]` in `TODO.md` and **append an entry to `PROGRESS.md`** (date, task, what changed, files touched, decisions made, how verified).
 7. Commit messages: conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`).
 
 ## Open Questions (do not unilaterally decide — ask the user)
 
-From `plan.md` §16: geography/delivery zones, commission model, escrow vs passthrough payments, languages (Arabic/French/English for Tunisia/MENA?), minimum order values, platform vs supplier-managed delivery. Default assumptions if not answered: single city, Tunisia/MENA, English-only MVP, no commission logic in MVP code, supplier-managed delivery.
+From `PLAN.md` §16: geography/delivery zones, commission model, escrow vs passthrough payments, languages (Arabic/French/English for Tunisia/MENA?), minimum order values, platform vs supplier-managed delivery. Default assumptions if not answered: single city, Tunisia/MENA, English-only MVP, no commission logic in MVP code, supplier-managed delivery.
