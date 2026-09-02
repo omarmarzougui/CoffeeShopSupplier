@@ -15,7 +15,7 @@
   - Root scripts: `dev`, `lint`, `typecheck`, `test`, `db:migrate`, `db:generate`, `db:seed`
   - `.env.example` (api), `.gitignore`, init git repo, first commit
   - Fill in the Commands section of `AGENTS.md`
-- [ ] **W2. Infrastructure (local)**
+- [x] **W2. Infrastructure (local)**
   - `infra/docker-compose.yml`: PostgreSQL, Redis, Meilisearch
   - API connects to Postgres + Redis + Meilisearch (health checks)
   - `lib/db.ts` (Prisma client), `lib/redis.ts`, `lib/search.ts`

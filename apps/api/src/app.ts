@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import { checkDependencies } from "./lib/health.js";
+import { redis } from "./lib/redis.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -11,6 +13,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.get("/health", async () => ({ status: "ok", service: "api" }));
+
+  app.get("/health/deps", async (_req, reply) => {
+    const deps = await checkDependencies();
+    const allUp = Object.values(deps).every((s) => s === "up");
+    return reply.code(allUp ? 200 : 503).send({ status: allUp ? "ok" : "degraded", deps });
+  });
+
+  app.addHook("onClose", async () => {
+    if (redis.status === "ready" || redis.status === "connecting") {
+      redis.disconnect();
+    }
+  });
 
   return app;
 }

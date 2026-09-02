@@ -43,3 +43,24 @@
   - Placeholder smoke tests in web so `pnpm -r test` stays green before real tests exist.
 - **Verification:** `pnpm -r lint` (5/5 Done), `pnpm -r typecheck` (5/5 Done), `pnpm -r test` (6 tests passed across api/web/utils), `pnpm -r build` OK, live boot of `dist/index.js` answered `{"status":"ok","service":"api"}` on :3000.
 - **Next task:** W2 — Infrastructure (docker-compose, db/redis/search client libs, health checks).
+
+---
+
+## 2026-09-02 — W2. Infrastructure (local)
+
+- **Task:** W2 — local Docker infra + API client libs for Postgres/Redis/Meilisearch + health checks.
+- **What changed:**
+  - `infra/docker-compose.yml` — Postgres 16, Redis 7, Meilisearch v1.15, named volumes, healthchecks.
+  - `apps/api/src/lib/db.ts` — Prisma client singleton; `redis.ts` — ioredis client + `checkRedis()`; `search.ts` — MeiliSearch client + `checkMeilisearch()`; `health.ts` — `checkDependencies()`.
+  - `apps/api/src/app.ts` — `/health` (liveness) + `/health/deps` (readiness, 503 when degraded); onClose hook disconnects redis.
+  - `apps/api/src/index.ts` — dotenv loading (root `.env` first, local override), SIGINT/SIGTERM graceful shutdown with `db.$disconnect()`.
+  - `prisma/schema.prisma` — minimal datasource scaffold (models come in W3).
+  - Moved `prisma` CLI + `@prisma/client` to root package.json (schema lives at root; avoids Prisma's broken `pnpm add` auto-install in workspaces). Root scripts now run prisma directly; `db:seed` delegates to api workspace.
+- **Files touched:** infra/docker-compose.yml, prisma/schema.prisma, apps/api/src/{app.ts,index.ts}, apps/api/src/lib/{db,redis,search,health}.ts, package.json, apps/api/package.json, pnpm-lock.yaml, apps/api/.env (local only, gitignored)
+- **Decisions made:**
+  - Prisma CLI at workspace root next to `prisma/` dir (per repo layout in AGENTS.md) — generates `@prisma/client` importable from all workspaces.
+  - `dotenv` loaded explicitly in index.ts (root `.env` + app-local override) because Prisma env resolution follows the schema location.
+  - Meilisearch container healthcheck uses `127.0.0.1` (busybox wget resolves `localhost` to IPv6, meili binds IPv4).
+  - `/health` stays 200 (liveness) even if deps down; `/health/deps` returns 503 — suitable for orchestration readiness probes.
+- **Verification:** `docker compose ps` all healthy; live API boot answered `/health/deps` `{"db":"up","redis":"up","search":"up"}`; graceful shutdown clean; `pnpm -r lint`/`typecheck` clean; `pnpm -r test` 6/6 passed.
+- **Next task:** W3 — Prisma schema (Phase 1 entities) + initial migration.
