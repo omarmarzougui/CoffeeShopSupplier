@@ -55,17 +55,16 @@ A two-sided B2B marketplace connecting coffee shop owners (**buyers**) with prod
 
 ## Commands
 
-> Fill these in when the project is scaffolded (see TODO task W1). Until then, commands may not exist.
-
 ```bash
 pnpm install              # install all workspace deps
 pnpm dev                   # run api + web concurrently
-pnpm --filter api dev      # backend only
-pnpm --filter web dev      # frontend only
+pnpm --filter @coffee/api dev      # backend only (tsx watch, :3000)
+pnpm --filter @coffee/web dev      # frontend only (vite, :5173, proxies /api)
+pnpm build                 # build all workspaces
 pnpm lint                  # ESLint across workspaces
 pnpm typecheck             # tsc --noEmit across workspaces
 pnpm test                  # Vitest unit tests
-pnpm --filter api test     # backend tests only
+pnpm --filter @coffee/api test     # backend tests only
 pnpm db:migrate            # prisma migrate dev
 pnpm db:generate           # prisma generate
 pnpm db:seed               # seed dev data (categories, demo users)

@@ -1,0 +1,28 @@
+{
+  "name": "coffee-shop-supplier",
+  "private": true,
+  "version": "0.1.0",
+  "description": "B2B marketplace connecting coffee shop owners with product suppliers",
+  "type": "module",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @coffee/api --filter @coffee/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @coffee/api db:migrate",
+    "db:generate": "pnpm --filter @coffee/api db:generate",
+    "db:seed": "pnpm --filter @coffee/api db:seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "eslint": "^9.30.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.6.2",
+    "typescript-eslint": "^8.35.0"
+  }
+}

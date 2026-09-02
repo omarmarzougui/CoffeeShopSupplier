@@ -8,7 +8,7 @@
 
 ### Week 1–2 — Setup, CI/CD, DB Schema, Auth
 
-- [ ] **W1. Monorepo scaffold**
+- [x] **W1. Monorepo scaffold**
   - pnpm workspaces: `apps/web`, `apps/api`, `packages/types`, `packages/ui`, `packages/utils`
   - Vite + React + TS (web), Fastify + TS (api), TypeScript strict everywhere
   - ESLint + Prettier config shared across workspaces
