@@ -39,7 +39,7 @@
 
 - [x] **W6. Categories & seed**
   - Category taxonomy per PLAN.md §5 (seed script)
-- [ ] **W7. Product CRUD (supplier)**
+- [x] **W7. Product CRUD (supplier)**
   - POST/PATCH/DELETE `/api/v1/products` (soft delete/archive)
   - Ownership enforced in service layer (`supplier_id === user`)
   - Fields: name, SKU, unit, price (minor units), MOQ, lead time, description, images, stock toggle

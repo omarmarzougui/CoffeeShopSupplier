@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import { checkDependencies } from "./lib/health.js";
 import { redis } from "./lib/redis.js";
 import { authRoutes } from "./routes/auth-routes.js";
+import { productRoutes } from "./routes/product-routes.js";
 import { registerErrorHandler } from "./middleware/error-handler.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -25,6 +26,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(authRoutes);
+  await app.register(productRoutes);
 
   app.addHook("onClose", async () => {
     if (redis.status === "ready" || redis.status === "connecting") {

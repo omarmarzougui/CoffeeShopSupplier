@@ -140,3 +140,23 @@
   - Seed script lives in `apps/api/prisma/` (per AGENTS.md layout: `db:seed` filters to api workspace) while schema stays at repo root.
 - **Verification:** `pnpm db:seed` OK; DB shows 38 categories / 7 roots / 3 demo users; re-run idempotent (counts unchanged); lint + typecheck clean; 20/20 tests pass.
 - **Next task:** W7 — Product CRUD (supplier) with ownership enforcement, Zod schemas, soft delete, integration tests.
+
+---
+
+## 2026-09-02 — W7. Product CRUD (supplier)
+
+- **Task:** W7 — supplier product create/update/archive with ownership + validation + tests.
+- **What changed:**
+  - `schemas/product-schemas.ts` — `createProductSchema` (price int positive = minor units, UUID categoryId, URL images, defaults for currency/MOQ/lead time/stock) and `updateProductSchema` (all-optional, non-empty enforced via refine).
+  - `services/product-service.ts` — `createProduct` (category existence check, SKU conflict → 409), `updateProduct`, `archiveProduct` (soft delete), `getProductOwned` (ownership: other supplier's product returns **404** to avoid enumeration; archived treated as not found).
+  - `routes/product-routes.ts` — POST/PATCH/DELETE `/api/v1/products`, supplier-only RBAC, Zod validation → 400 envelope.
+  - `app.ts` — registered product routes.
+  - Tests: 9 route integration tests (JWT signed in-memory, mocked db) — role 403, unauth 401, ownership 404, soft delete, SKU handling, empty-body 400.
+- **Files touched:** apps/api/src/{schemas/product-schemas.ts,services/product-service.ts,routes/product-routes.ts,routes/product-routes.test.ts,app.ts}
+- **Decisions made:**
+  - Update schema is a **separate** object (not `.partial()` of create) — create's defaults would silently fill fields on `{}`; update must be explicit and non-empty.
+  - Foreign products return 404 (not 403) — don't leak existence of competitors' products.
+  - Archive (soft delete) only; no hard DELETE — products referenced by orders must persist.
+  - `Prisma.PrismaClientKnownRequestError` P2002 mapped to 409 `SKU_TAKEN`.
+- **Verification:** 24/24 tests; lint + typecheck clean. Live smoke with seeded supplier: login → create 200 → patch 200 (price updated in DB) → archive 200 (`archived=t`) → buyer token blocked 403. Smoke row cleaned up.
+- **Next task:** W8 — Product listing & search (GET with filters, Meilisearch index + sync, CSV export placeholder).
