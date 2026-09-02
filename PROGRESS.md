@@ -83,3 +83,29 @@
   - Named relations on User (OrderBuyer/OrderSupplier/standing order buyer/supplier) to disambiguate multiple User FKs.
 - **Verification:** `prisma validate` valid; `pnpm db:generate` OK; `pnpm db:migrate --name init` applied; `\dt` shows all tables; lint/typecheck clean; tests 6/6.
 - **Next task:** W4 — Auth system (register, login, refresh rotation, logout, RBAC middleware, rate limiting, email verification, AppError).
+
+---
+
+## 2026-09-02 — W4. Auth system
+
+- **Task:** W4 — full auth: register/login/refresh-rotation/logout, RBAC, rate limiting, error envelope, email (dev console), tests.
+- **What changed:**
+  - `lib/errors.ts` — `AppError` + `appErrorHandler` → `{ error: { code, message, details? } }`.
+  - `lib/tokens.ts` — JWT access sign/verify (15 min, HS256, `sub` + `role` claims).
+  - `lib/email.ts` — Resend client; dev fallback logs to console.
+  - `middleware/auth.ts` — `requireAuth` (Bearer parser) + `requireRole(...roles)` RBAC guard; augments `FastifyRequest.user`.
+  - `middleware/rate-limit.ts` — Redis fixed-window limiter (10 req/min/IP per route prefix).
+  - `middleware/error-handler.ts` — global Fastify error handler using AppError envelope.
+  - `services/auth-service.ts` — register (bcrypt 10 rounds, dup email 409), login (constant 401s), refresh **rotation with reuse detection** (reuse revokes ALL user tokens), logout (revoke single token). Refresh tokens stored as SHA-256 hashes only, 30-day TTL.
+  - `routes/auth-routes.ts` — thin Zod-validated routes under `/api/v1/auth/*`.
+  - Tests: 10 service unit tests (mocked Prisma) + 5 route integration tests via `fastify.inject()` — 15/15 green.
+- **Files touched:** apps/api/src/{lib/errors.ts,lib/tokens.ts,lib/email.ts,middleware/auth.ts,middleware/rate-limit.ts,middleware/error-handler.ts,services/auth-service.ts,services/auth-service.test.ts,routes/auth-routes.ts,app.ts,app.test.ts}, eslint.config.js, package.json (api: zod, bcryptjs, jsonwebtoken, resend, types)
+- **Decisions made:**
+  - Refresh-token rotation with reuse detection (family revocation) — security best practice, detectable via 401 `TOKEN_REUSE_DETECTED`.
+  - Only token **hashes** persisted; raw tokens exist solely in client hands.
+  - Rate limiter fails **open** if Redis is down (availability over strictness in MVP) — logged via swallow, AppError still thrown when limit exceeded.
+  - Email verification token emailed in dev (console); verifiedAt stays null until W16 confirmation endpoint.
+  - ESLint: `no-unused-vars` ignores `_`-prefixed args.
+  - Zod `.safeParse` in routes; validation failures → 400 `VALIDATION_ERROR` with flattened details.
+- **Verification:** Unit+integration 15/15; lint clean; typecheck clean. Live smoke against real Postgres+Redis: register 200 → user row created; login 200; refresh 200 with rotation (old token replay → 401, DB shows 2 revoked tokens); logout 200. Rate limiting active (Redis keys `ratelimit:*`).
+- **Next task:** W5 — CI/CD pipeline (GitHub Actions: install → lint → typecheck → test).

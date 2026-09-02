@@ -23,7 +23,7 @@
   - `users`, `products`, `categories`, `orders`, `order_items`, `invoices` (per PLAN.md §6.3)
   - Money as integer minor units; enums for roles/statuses
   - Initial migration committed
-- [ ] **W4. Auth system**
+- [x] **W4. Auth system**
   - Zod schemas + routes: register, login, refresh (rotation), logout
   - JWT access (15 min) + refresh tokens; bcrypt/argon2 hashing
   - `middleware/auth.ts` + RBAC guard (`buyer` | `supplier` | `admin`)
