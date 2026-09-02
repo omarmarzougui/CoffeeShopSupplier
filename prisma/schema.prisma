@@ -6,3 +6,204 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum Role {
+  buyer
+  supplier
+  admin
+}
+
+enum ProductUnit {
+  kg
+  l
+  case
+  box
+  unit
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  dispatched
+  delivered
+  cancelled
+}
+
+enum InvoiceStatus {
+  unpaid
+  paid
+  overdue
+}
+
+enum StandingOrderFrequency {
+  weekly
+  biweekly
+  monthly
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  role         Role
+  businessName String
+  logoUrl      String?
+  phone        String?
+  address      String?
+  vatId        String?
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  products               Product[]
+  ordersAsBuyer          Order[]         @relation("OrderBuyer")
+  ordersAsSupplier       Order[]         @relation("OrderSupplier")
+  standingOrdersBuyer    StandingOrder[] @relation("StandingOrderBuyer")
+  standingOrdersSupplier StandingOrder[] @relation("OrderSupplier2")
+  refreshTokens          RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  parentId  String?
+  createdAt DateTime @default(now())
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id             String      @id @default(uuid())
+  supplierId     String
+  categoryId     String
+  name           String
+  sku            String
+  description    String?
+  unit           ProductUnit
+  price          Int
+  currency       String      @default("TND")
+  minOrderQty    Int         @default(1)
+  leadTimeDays   Int         @default(1)
+  stockAvailable Boolean     @default(true)
+  images         String[]
+  archived       Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  supplier      User                @relation(fields: [supplierId], references: [id])
+  category      Category            @relation(fields: [categoryId], references: [id])
+  orderItems    OrderItem[]
+  standingItems StandingOrderItem[]
+
+  @@unique([supplierId, sku])
+  @@index([supplierId])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  buyerId      String
+  supplierId   String
+  status       OrderStatus @default(pending)
+  totalAmount  Int
+  currency     String      @default("TND")
+  notes        String?
+  createdAt    DateTime    @default(now())
+  confirmedAt  DateTime?
+  dispatchedAt DateTime?
+  deliveredAt  DateTime?
+  cancelledAt  DateTime?
+
+  buyer    User        @relation("OrderBuyer", fields: [buyerId], references: [id])
+  supplier User        @relation("OrderSupplier", fields: [supplierId], references: [id])
+  items    OrderItem[]
+  invoice  Invoice?
+
+  @@index([buyerId, status])
+  @@index([supplierId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Int
+  subtotal  Int
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model Invoice {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  invoiceNumber String        @unique
+  issuedAt      DateTime      @default(now())
+  dueDate       DateTime
+  status        InvoiceStatus @default(unpaid)
+  pdfUrl        String?
+  createdAt     DateTime      @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("invoices")
+}
+
+model StandingOrder {
+  id          String                 @id @default(uuid())
+  buyerId     String
+  supplierId  String
+  frequency   StandingOrderFrequency
+  nextRunDate DateTime
+  active      Boolean                @default(true)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  buyer    User                @relation("StandingOrderBuyer", fields: [buyerId], references: [id])
+  supplier User                @relation("OrderSupplier2", fields: [supplierId], references: [id])
+  items    StandingOrderItem[]
+
+  @@index([nextRunDate])
+  @@map("standing_orders")
+}
+
+model StandingOrderItem {
+  id              String @id @default(uuid())
+  standingOrderId String
+  productId       String
+  quantity        Int
+
+  standingOrder StandingOrder @relation(fields: [standingOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([standingOrderId])
+  @@map("standing_order_items")
+}

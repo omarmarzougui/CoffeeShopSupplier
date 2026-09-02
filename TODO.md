@@ -19,7 +19,7 @@
   - `infra/docker-compose.yml`: PostgreSQL, Redis, Meilisearch
   - API connects to Postgres + Redis + Meilisearch (health checks)
   - `lib/db.ts` (Prisma client), `lib/redis.ts`, `lib/search.ts`
-- [ ] **W3. Prisma schema (Phase 1 entities)**
+- [x] **W3. Prisma schema (Phase 1 entities)**
   - `users`, `products`, `categories`, `orders`, `order_items`, `invoices` (per PLAN.md §6.3)
   - Money as integer minor units; enums for roles/statuses
   - Initial migration committed

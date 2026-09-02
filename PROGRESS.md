@@ -64,3 +64,22 @@
   - `/health` stays 200 (liveness) even if deps down; `/health/deps` returns 503 — suitable for orchestration readiness probes.
 - **Verification:** `docker compose ps` all healthy; live API boot answered `/health/deps` `{"db":"up","redis":"up","search":"up"}`; graceful shutdown clean; `pnpm -r lint`/`typecheck` clean; `pnpm -r test` 6/6 passed.
 - **Next task:** W3 — Prisma schema (Phase 1 entities) + initial migration.
+
+---
+
+## 2026-09-02 — W3. Prisma schema (Phase 1 entities)
+
+- **Task:** W3 — full Phase 1 Prisma schema + initial migration.
+- **What changed:**
+  - `prisma/schema.prisma` — models: `User` (roles, business profile, verification), `RefreshToken` (hashed, revocable — for W4 rotation), `Category` (self-referential tree), `Product` (minor-unit price Int, MOQ, lead time, stock toggle, images[], archived soft-delete, unique SKU per supplier), `Order` (status machine timestamps), `OrderItem` (quantity, unitPrice, subtotal as Int), `Invoice` (unique invoiceNumber, dueDate, status), `StandingOrder` + `StandingOrderItem` (schema present for W-phase later; not exposed in MVP API).
+  - Enums: `Role`, `ProductUnit`, `OrderStatus`, `InvoiceStatus`, `StandingOrderFrequency`.
+  - Migration `20260902131014_init` committed; all 9 tables + `_prisma_migrations` verified in Postgres.
+- **Files touched:** prisma/schema.prisma, prisma/migrations/** (new), pnpm-lock.yaml (unchanged)
+- **Decisions made:**
+  - Money as `Int` minor units everywhere (AGENTS.md rule); `currency` defaults "TND" per open-question defaults.
+  - Products use `archived` flag for soft delete (W7 requirement) — never hard-delete referenced products.
+  - `RefreshToken` stores only `tokenHash` — raw refresh tokens never persisted (W4 security).
+  - Standing orders modeled now (cheap, avoids Phase 2 migration churn) but no API surface until later phase.
+  - Named relations on User (OrderBuyer/OrderSupplier/standing order buyer/supplier) to disambiguate multiple User FKs.
+- **Verification:** `prisma validate` valid; `pnpm db:generate` OK; `pnpm db:migrate --name init` applied; `\dt` shows all tables; lint/typecheck clean; tests 6/6.
+- **Next task:** W4 — Auth system (register, login, refresh rotation, logout, RBAC middleware, rate limiting, email verification, AppError).
