@@ -109,3 +109,19 @@
   - Zod `.safeParse` in routes; validation failures → 400 `VALIDATION_ERROR` with flattened details.
 - **Verification:** Unit+integration 15/15; lint clean; typecheck clean. Live smoke against real Postgres+Redis: register 200 → user row created; login 200; refresh 200 with rotation (old token replay → 401, DB shows 2 revoked tokens); logout 200. Rate limiting active (Redis keys `ratelimit:*`).
 - **Next task:** W5 — CI/CD pipeline (GitHub Actions: install → lint → typecheck → test).
+
+---
+
+## 2026-09-02 — W5. CI/CD pipeline
+
+- **Task:** W5 — GitHub Actions CI on PRs + pushes to main.
+- **What changed:**
+  - `.github/workflows/ci.yml` — pnpm/action-setup + Node 22 (cache: pnpm), then: install (`--frozen-lockfile`) → `pnpm db:generate` (Prisma client needed for typecheck/tests) → lint → typecheck → test → build. Concurrency group cancels superseded runs.
+- **Files touched:** .github/workflows/ci.yml
+- **Decisions made:**
+  - Single `ci` job for MVP (lint/typecheck/test/build are fast); split jobs only when times justify it.
+  - `db:generate` in CI because typecheck+tests import `@prisma/client` types generated from schema.
+  - No Postgres/Redis/Meilisearch services in CI — current tests mock Prisma/Redis; revisit when real-DB integration tests are added (W17).
+  - Build step included as a smoke gate.
+- **Verification:** Ran the exact CI sequence locally: `pnpm install --frozen-lockfile` OK, `db:generate` OK, lint 5/5 workspaces Done, typecheck 5/5 Done, tests 20/20 passed (4 utils + 1 web + 15 api), build both apps OK. `.env.example` verified as superset of `process.env.*` reads in code.
+- **Next task:** W6 — Categories & seed (taxonomy per PLAN.md §5 + demo users).

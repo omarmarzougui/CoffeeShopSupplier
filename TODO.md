@@ -31,7 +31,7 @@
   - Rate limiting on auth endpoints (Redis)
   - Shared `AppError` + global error handler `{ error: { code, message } }`
   - Unit tests for auth service
-- [ ] **W5. CI/CD pipeline**
+- [x] **W5. CI/CD pipeline**
   - GitHub Actions: install → lint → typecheck → test on PRs
   - `.env.example` kept in sync; no secrets in repo
 
