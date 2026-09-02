@@ -125,3 +125,18 @@
   - Build step included as a smoke gate.
 - **Verification:** Ran the exact CI sequence locally: `pnpm install --frozen-lockfile` OK, `db:generate` OK, lint 5/5 workspaces Done, typecheck 5/5 Done, tests 20/20 passed (4 utils + 1 web + 15 api), build both apps OK. `.env.example` verified as superset of `process.env.*` reads in code.
 - **Next task:** W6 — Categories & seed (taxonomy per PLAN.md §5 + demo users).
+
+---
+
+## 2026-09-02 — W6. Categories & seed
+
+- **Task:** W6 — category taxonomy seed + demo users.
+- **What changed:**
+  - `apps/api/prisma/seed.ts` — full 2-level taxonomy from PLAN.md §5 (7 roots, 31 children = 38 categories) via upserts (idempotent); 3 demo users (admin/buyer/supplier, all `password123`, bcrypt-hashed) via upserts.
+- **Files touched:** apps/api/prisma/seed.ts
+- **Decisions made:**
+  - Seed uses `upsert` keyed on unique slug/email — safe to re-run, no duplicates.
+  - Demo password shared and printed in seed output; dev-only accounts.
+  - Seed script lives in `apps/api/prisma/` (per AGENTS.md layout: `db:seed` filters to api workspace) while schema stays at repo root.
+- **Verification:** `pnpm db:seed` OK; DB shows 38 categories / 7 roots / 3 demo users; re-run idempotent (counts unchanged); lint + typecheck clean; 20/20 tests pass.
+- **Next task:** W7 — Product CRUD (supplier) with ownership enforcement, Zod schemas, soft delete, integration tests.
