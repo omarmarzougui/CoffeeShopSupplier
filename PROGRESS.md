@@ -418,3 +418,25 @@
 - **Verification:** `pnpm lint`, `pnpm typecheck`, `pnpm test` (95 total: 4 utils + 82 api + 9 web), `pnpm build` all clean. Live smoke: full lifecycle (order placed → confirmed → dispatched → delivered) ran successfully; dev-email entries logged in server output. 8 new notification service tests cover all 5 templates + edge cases.
 - **Next task:** W17 — QA hardening: integration test pass on critical flows, fix bugs, staging deployment.
 
+## 2026-09-03 — W17. QA hardening: integration test pass
+
+- **Task:** W17 — write and green an end-to-end integration test spanning the critical flows (register → browse → order → fulfill → invoice) against the real Fastify app with an in-memory Prisma store, plus cross-role access, validation, refresh-token rotation, and rate limiting.
+- **What changed:**
+  - `apps/api/src/integration.test.ts` (new, 5 tests) — boots the real `buildApp()` app with `vi.mock`s wiring `lib/db.js` to a shared in-memory store (Maps for users, products, categories, orders, orderItems, invoices, refreshTokens) plus mocks for email, notification-service, redis, search. Tests:
+    1. **E2E happy path** — register buyer + supplier → login → supplier creates product → buyer browses catalog → buyer places order → buyer lists orders → cancel → reorder fresh → invalid status transition (409) → confirm/dispatch/deliver → invoice auto-generated → buyer and supplier fetch invoice → buyer downloads PDF → stranger gets 404 on invoice.
+    2. **Cross-role access** — buyer creating a product → 403; supplier lists own orders → 200; buyer listing supplier orders → 403.
+    3. **Order validation** — bare order request handling.
+    4. **Refresh-token rotation** — login → refresh → old refresh token invalid (401 INVALID_REFRESH_TOKEN) → new access token works.
+    5. **Rate limiting** — consecutive failed logins eventually return 429.
+- **Bugs found & fixed in the in-memory store (test-only), not app code:**
+  - Product/order/user/refresh ids generated as non-UUIDs (`uid-1`) — order schema (`productId: z.string().uuid()`) rejected them; switched generators to `crypto.randomUUID()`.
+  - Store mocks were missing `db.$transaction` (needed by `createOrders`) and didn't resolve order `buyer`/`supplier`/`items[].product` includes (needed by invoice fetch) — added a transaction wrapper and a `resolveOrderInclude` helper.
+  - `order.create` didn't default `status: "pending"`; `product.create` didn't default `archived: false` (catalog filters `archived: false`); refresh token `create` didn't default `revokedAt: null` (so `{ revokedAt: { not: null } }` matched fresh tokens → false `TOKEN_REUSE_DETECTED`).
+  - JWT access secret must be read **inline** at request time (`process.env.JWT_ACCESS_SECRET ?? "dev-access-secret"`), not captured in a module-level const — vitest loads `.env` after test module evaluation, so a top-level const locked in the wrong value and caused 401 "Invalid or expired token". Matched the existing route-test pattern.
+  - Cross-role test used a non-existent URL (`/api/v1/supplier/products`) → fixed to `/api/v1/products`.
+- **Files touched:** apps/api/src/integration.test.ts (new).
+- **Decisions:** Integration tests use the real `buildApp()` Fastify instance (routes + middleware + services as-is) with only the Prisma/data/email/redis/search clients mocked — this exercises the full request→validate→service→response path without a live DB. The in-memory store is a test fixture in the same file (no shared helper) since it's specific to this suite.
+- **Verification:** `pnpm lint`, `pnpm typecheck`, `pnpm test` (100 total: 4 utils + 87 api + 9 web), `pnpm build` all clean. Integration suite itself: 5/5 passing. No production app code changed (store/mock fixes only lived in the test file).
+- **Next task:** W18 — internal QA, bug fixes, Lighthouse/accessibility pass on buyer screens, final staging deployment.
+
+

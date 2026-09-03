@@ -81,7 +81,7 @@
   - Status `unpaid`; overdue job (daily cron)
 - [x] **W16. Email notifications (Resend)**
   - Order placed / confirmed / dispatched / delivered / invoice due templates
-- [ ] **W17. QA hardening**
+- [x] **W17. QA hardening**
   - Integration test pass on critical flows; fix bugs; staging deployment
 
 ### Week 10 — QA & Stabilization
