@@ -20,6 +20,11 @@ const dbMock = {
 
 vi.mock("../lib/db.js", () => ({ db: dbMock }));
 vi.mock("../lib/email.js", () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../services/notification-service.js", () => ({
+  notifySupplierOrderPlaced: vi.fn().mockResolvedValue(undefined),
+  notifyBuyerOrderStatus: vi.fn().mockResolvedValue(undefined),
+  notifyBuyerInvoiceOverdue: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../lib/redis.js", () => ({
   redis: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn() },
   checkRedis: vi.fn(),
@@ -32,7 +37,7 @@ vi.mock("../lib/search.js", () => ({
 }));
 
 const { buildApp } = await import("../app.js");
-const { sendEmail } = await import("../lib/email.js");
+const { notifySupplierOrderPlaced } = await import("../services/notification-service.js");
 
 const BUYER_ID = "123e4567-e89b-42d3-a456-426614174001";
 const SUPPLIER_A = "123e4567-e89b-42d3-a456-426614174002";
@@ -113,10 +118,8 @@ describe("POST /api/v1/orders", () => {
     };
     expect(createCall.data.buyerId).toBe(BUYER_ID);
     expect(createCall.data.status).toBeUndefined(); // default pending
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(sendEmail).toHaveBeenCalledWith(
-      "supplier-123e4567-e89b-42d3-a456-426614174002@coffee.test",
-      expect.any(String),
+    expect(notifySupplierOrderPlaced).toHaveBeenCalledTimes(1);
+    expect(notifySupplierOrderPlaced).toHaveBeenCalledWith(
       expect.any(String),
     );
   });
@@ -153,7 +156,7 @@ describe("POST /api/v1/orders", () => {
     expect(body.orders.map((o: { supplierId: string }) => o.supplierId).sort()).toEqual(
       [SUPPLIER_A, SUPPLIER_B].sort(),
     );
-    expect(sendEmail).toHaveBeenCalledTimes(2);
+    expect(notifySupplierOrderPlaced).toHaveBeenCalledTimes(2);
   });
 
   it("rejects with 400 when a product is missing or archived", async () => {

@@ -1,8 +1,8 @@
 import type { Order, OrderItem, OrderStatus } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
-import { sendEmail } from "../lib/email.js";
 import { ensureInvoiceForOrder } from "./invoice-service.js";
+import { notifyBuyerOrderStatus } from "./notification-service.js";
 import type { ListOrdersQuery } from "../schemas/order-schemas.js";
 
 const ORDER_NOT_FOUND = new AppError(404, "ORDER_NOT_FOUND", "Order not found");
@@ -97,7 +97,7 @@ async function transition(
   });
 
   if (to === "confirmed" || to === "dispatched" || to === "delivered") {
-    await sendOrderStatusEmail(order, to).catch(() => {
+    await notifyBuyerOrderStatus(order.id, to).catch(() => {
       // Email is best-effort; the transition must not fail if sending fails
     });
   }
@@ -109,19 +109,6 @@ async function transition(
   }
 
   return updated;
-}
-
-async function sendOrderStatusEmail(
-  order: Order,
-  status: OrderStatus,
-): Promise<void> {
-  const buyer = await db.user.findUnique({ where: { id: order.buyerId } });
-  if (!buyer) return;
-  await sendEmail(
-    buyer.email,
-    `Order ${order.id} ${status}`,
-    `<p>Your order ${order.id} has been ${status}.</p>`,
-  );
 }
 
 export function confirmOrder(supplierId: string, orderId: string): Promise<Order> {

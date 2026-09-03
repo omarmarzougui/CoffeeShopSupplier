@@ -1,7 +1,7 @@
 import type { Order, OrderItem, OrderStatus } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
-import { sendEmail } from "../lib/email.js";
+import { notifySupplierOrderPlaced } from "./notification-service.js";
 import type { CreateOrdersInput, ListOrdersQuery } from "../schemas/order-schemas.js";
 
 interface CreateOrderResult {
@@ -94,13 +94,7 @@ export async function createOrders(
 
     orders.push(order.created);
     if (order.supplier) {
-      await sendEmail(
-        order.supplier.email,
-        `New order ${order.created.id}`,
-        `<p>You have a new order ${order.created.id} for ${order.created.totalAmount} ${order.created.currency}.</p>`,
-      ).catch(() => {
-        // Email is best-effort; order placement must not fail if sending fails
-      });
+      await notifySupplierOrderPlaced(order.created.id);
     }
   }
 

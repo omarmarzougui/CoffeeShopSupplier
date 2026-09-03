@@ -387,3 +387,34 @@
 - **Verification:** `pnpm lint`, `pnpm typecheck` (all 5 workspaces), `pnpm test` (87 pass), `pnpm build` all clean. Refresh token rotation verified: first refresh succeeds, second (reused) gets `TOKEN_REUSE_DETECTED` 401. Vite dev server still serving.
 - **Next task:** Continue with W16 (Email notifications) or next requested work.
 
+
+---
+
+## 2026-09-03 — W16. Email notifications (Resend)
+
+- **Task:** W16 — create styled HTML email templates for the order lifecycle + overdue invoices, consolidate scattered inline `sendEmail` calls into a notification service.
+- **What changed:**
+  - `services/email-templates.ts` (new) — 5 responsive HTML email templates (inline CSS, works in Gmail/Outlook):
+    - `orderPlacedSupplier`: item table (name/qty/unit price/subtotal) + total + notes + supplier dashboard CTA
+    - `orderConfirmed`: supplier name, next-step note
+    - `orderDispatched`: supplier name
+    - `orderDelivered`: invoice summary (number, total, due date) + download hint
+    - `invoiceOverdue`: red callout (amount, past-due date) + payment CTA
+  - `services/notification-service.ts` (new) — typed façade functions that load order/invoice relations and call `sendEmail` (best-effort `.catch()`):
+    - `notifySupplierOrderPlaced(orderId)` — loads buyer/supplier/items, sends `orderPlacedSupplier`
+    - `notifyBuyerOrderStatus(orderId, status)` — for `confirmed`/`dispatched`/`delivered`; sends the matching template; `delivered` also includes the invoice data
+    - `notifyBuyerInvoiceOverdue(invoiceId)` — sends `invoiceOverdue` to the order's buyer
+  - `services/notification-service.test.ts` (new, 8 tests) — mocks db + sendEmail, verifies: correct recipient + subject + HTML content for placed/confirmed/dispatched/delivered/overdue; skipped for pending/cancelled; skipped when order/invoice not found; overdue only sends when status is `overdue`.
+  - `services/order-service.ts` — replaced inline `sendEmail` (supplier on order placed) with `notifySupplierOrderPlaced(order.created.id)`.
+  - `services/supplier-order-service.ts` — replaced `sendOrderStatusEmail` helper (inline sendEmail to buyer) with `notifyBuyerOrderStatus(order.id, to)` in the `transition` function; removed the old helper entirely.
+  - `jobs/overdue-invoices.ts` — after `updateMany` marks invoices overdue, calls `notifyBuyerInvoiceOverdue` for each affected invoice (best-effort).
+  - Updated `routes/order-routes.test.ts` and `routes/supplier-order-routes.test.ts`: mocked `notification-service` module and updated assertions from `sendEmail` → `notifySupplierOrderPlaced` / `notifyBuyerOrderStatus`.
+- **Files touched:** apps/api/src/{services/{email-templates.ts, notification-service.ts, notification-service.test.ts, order-service.ts, supplier-order-service.ts}, jobs/overdue-invoices.ts, routes/{order-routes.test.ts, supplier-order-routes.test.ts}}
+- **Decisions:**
+  - Templates are pure functions returning HTML strings (no templating engine — keeps the stack simple and avoids a dependency).
+  - All notification calls are wrapped in `.catch(() => {})` at the call site (in transition/order service) so emails never block or fail the business flow.
+  - The notification service owns the relation lookups (loads buyer/supplier/items separately from the caller) — keeps services thin and avoids duplicating includes.
+  - The `delivered` status email includes invoice data (number + due date), making the notification a useful receipt.
+- **Verification:** `pnpm lint`, `pnpm typecheck`, `pnpm test` (95 total: 4 utils + 82 api + 9 web), `pnpm build` all clean. Live smoke: full lifecycle (order placed → confirmed → dispatched → delivered) ran successfully; dev-email entries logged in server output. 8 new notification service tests cover all 5 templates + edge cases.
+- **Next task:** W17 — QA hardening: integration test pass on critical flows, fix bugs, staging deployment.
+

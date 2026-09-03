@@ -15,6 +15,11 @@ const dbMock = {
 
 vi.mock("../lib/db.js", () => ({ db: dbMock }));
 vi.mock("../lib/email.js", () => ({ sendEmail: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../services/notification-service.js", () => ({
+  notifySupplierOrderPlaced: vi.fn().mockResolvedValue(undefined),
+  notifyBuyerOrderStatus: vi.fn().mockResolvedValue(undefined),
+  notifyBuyerInvoiceOverdue: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../lib/redis.js", () => ({
   redis: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn() },
   checkRedis: vi.fn(),
@@ -27,7 +32,7 @@ vi.mock("../lib/search.js", () => ({
 }));
 
 const { buildApp } = await import("../app.js");
-const { sendEmail } = await import("../lib/email.js");
+const { notifyBuyerOrderStatus } = await import("../services/notification-service.js");
 
 const BUYER_ID = "123e4567-e89b-42d3-a456-426614174001";
 const SUPPLIER_A = "123e4567-e89b-42d3-a456-426614174002";
@@ -132,8 +137,11 @@ describe("supplier order transitions", () => {
     const updateCall = dbMock.order.update.mock.calls[0]![0];
     expect(updateCall.data.status).toBe("confirmed");
     expect(updateCall.data.confirmedAt).toBeInstanceOf(Date);
-    expect(sendEmail).toHaveBeenCalledTimes(1);
-    expect(sendEmail).toHaveBeenCalledWith("buyer@coffee.test", expect.any(String), expect.any(String));
+    expect(notifyBuyerOrderStatus).toHaveBeenCalledTimes(1);
+    expect(notifyBuyerOrderStatus).toHaveBeenCalledWith(
+      ORDER_ID,
+      "confirmed",
+    );
   });
 
   it("moves confirmed → dispatched with a timestamp", async () => {

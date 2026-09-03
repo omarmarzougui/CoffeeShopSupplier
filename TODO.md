@@ -79,7 +79,7 @@
   - Auto-generate invoice on `delivered`; invoice number sequence
   - PDF via pdf-lib; GET `/invoices/:id` + `/invoices/:id/pdf`
   - Status `unpaid`; overdue job (daily cron)
-- [ ] **W16. Email notifications (Resend)**
+- [x] **W16. Email notifications (Resend)**
   - Order placed / confirmed / dispatched / delivered / invoice due templates
 - [ ] **W17. QA hardening**
   - Integration test pass on critical flows; fix bugs; staging deployment
