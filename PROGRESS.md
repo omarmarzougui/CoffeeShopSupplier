@@ -368,3 +368,22 @@
   - Note: tracked down a false scare where `GET /orders/:id` showed `invoice: null` — the order-detail endpoint intentionally does not embed the invoice; invoices are their own resource. Generation was confirmed in the DB directly.
 - **Next task:** W16 — Email notifications (Resend): dedicated templates for order placed / confirmed / dispatched / delivered / invoice due, replacing inline best-effort sends.
 
+
+---
+
+## 2026-09-03 — Fix: Session persistence across page refresh + auto-refresh
+
+- **Task:** Fix page refresh logging the user out; persist token in localStorage; add proactive auto-refresh.
+- **What changed:**
+  - `stores/auth-store.ts` — added `isReady` flag; `initialize()` now calls `api.restoreSession()` which proactively refreshes expired access tokens on mount; sets `isReady = true` when done.
+  - `lib/api.ts` — added `decodeExp()` to read JWT exp, `isAccessTokenExpiringSoon()`, `scheduleAutoRefresh()` (setTimeout to refresh ~60s before expiry), `restoreSession()` (refreshes access token if expired/expiring, returns boolean), `clearSession()`. `apiFetch` now calls `scheduleAutoRefresh()` after successful refresh. `clearRefreshToken`/`clearToken`/`clearUser` use localStorage keys as constants.
+  - `components/ProtectedRoute.tsx` + `components/RoleProtectedRoute.tsx` — show a loading screen (not a redirect to `/login`) while `isReady === false`.
+  - `lib/auth-context.tsx` — listen for `auth:session-expired` custom event (fired by the auto-refresh timer on failure) and clear the session.
+- **Files touched:** apps/web/src/{stores/auth-store.ts, lib/api.ts, lib/auth-context.tsx, components/ProtectedRoute.tsx, components/RoleProtectedRoute.tsx}
+- **Decisions:**
+  - `initialize()` is async and runs `restoreSession()` (which does one refresh attempt before the first API call). This means page refreshes no longer bounce to login if the access token is expired but the refresh token is still valid.
+  - Auto-refresh runs via `setTimeout` scheduled 60s before JWT `exp`. The actual `refreshAccessToken` uses a single-flight promise (`refreshPromise`) so concurrent calls serialize. When the refresh timer fires and fails, `clearSession()` runs and a `auth:session-expired` event is dispatched so `AuthProvider` can trigger logout.
+  - Route guards now show "Loading..." while `isReady === false`, preventing the race where ProtectedRoute redirects to `/login` before `initialize()` finishes.
+- **Verification:** `pnpm lint`, `pnpm typecheck` (all 5 workspaces), `pnpm test` (87 pass), `pnpm build` all clean. Refresh token rotation verified: first refresh succeeds, second (reused) gets `TOKEN_REUSE_DETECTED` 401. Vite dev server still serving.
+- **Next task:** Continue with W16 (Email notifications) or next requested work.
+
