@@ -75,7 +75,7 @@
 
 ### Week 9 — Invoicing & Notifications
 
-- [ ] **W15. Invoice generation**
+- [x] **W15. Invoice generation**
   - Auto-generate invoice on `delivered`; invoice number sequence
   - PDF via pdf-lib; GET `/invoices/:id` + `/invoices/:id/pdf`
   - Status `unpaid`; overdue job (daily cron)

@@ -5,9 +5,11 @@ config({ path: ".env", override: true });
 
 import { buildApp } from "./app.js";
 import { db } from "./lib/db.js";
+import { startOverdueInvoicesJob } from "./jobs/overdue-invoices.js";
 
 const app = await buildApp();
 app.log.info("api starting");
+startOverdueInvoicesJob();
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";

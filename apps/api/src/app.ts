@@ -6,6 +6,7 @@ import { redis } from "./lib/redis.js";
 import { ensureProductIndex } from "./lib/search.js";
 import { authRoutes } from "./routes/auth-routes.js";
 import { categoryRoutes } from "./routes/category-routes.js";
+import { invoiceRoutes } from "./routes/invoice-routes.js";
 import { orderRoutes } from "./routes/order-routes.js";
 import { productRoutes } from "./routes/product-routes.js";
 import { supplierOrderRoutes } from "./routes/supplier-order-routes.js";
@@ -42,6 +43,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(productRoutes);
   await app.register(orderRoutes);
   await app.register(supplierOrderRoutes);
+  await app.register(invoiceRoutes);
 
   app.addHook("onClose", async () => {
     if (redis.status === "ready" || redis.status === "connecting") {

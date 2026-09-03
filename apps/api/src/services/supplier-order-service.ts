@@ -2,6 +2,7 @@ import type { Order, OrderItem, OrderStatus } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
 import { sendEmail } from "../lib/email.js";
+import { ensureInvoiceForOrder } from "./invoice-service.js";
 import type { ListOrdersQuery } from "../schemas/order-schemas.js";
 
 const ORDER_NOT_FOUND = new AppError(404, "ORDER_NOT_FOUND", "Order not found");
@@ -98,6 +99,12 @@ async function transition(
   if (to === "confirmed" || to === "dispatched" || to === "delivered") {
     await sendOrderStatusEmail(order, to).catch(() => {
       // Email is best-effort; the transition must not fail if sending fails
+    });
+  }
+
+  if (to === "delivered") {
+    await ensureInvoiceForOrder(order.id).catch(() => {
+      // Invoice auto-generation is best-effort here; it can be retried later
     });
   }
 

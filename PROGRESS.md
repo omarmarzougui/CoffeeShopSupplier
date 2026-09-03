@@ -339,3 +339,32 @@
   - Order items enriched with product name/sku/unit in list+get for both buyer and supplier views; kept `createOrders` output unchanged.
 - **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean — 81 tests (68 api + 4 utils + 8 cart + 1 web); web build 116 modules. Live smoke (dev servers): placed an order → supplier `GET /supplier/orders` lists it `pending`; `dispatch` from pending → 409 (no skip); `confirm` → confirmed + `confirmedAt`; re-`confirm` → 409; `dispatch` → dispatched; `deliver` → delivered; buyer emailed on each transition (confirmed/dispatched/delivered). All smoke data cleaned up (orders/items/W14 product removed). Dev servers left running (web :5173, api :3000, infra up).
 - **Next task:** W15 — Invoice generation: auto-generate invoice on `delivered`, invoice number sequence, PDF via pdf-lib, GET `/invoices/:id` + `/invoices/:id/pdf`, status `unpaid`, overdue daily job.
+
+---
+
+## 2026-09-03 — W15. Invoice generation + PDF (web/backend)
+
+- **Task:** W15 — auto-generate an invoice when an order is marked `delivered`, generate a PDF via pdf-lib, expose `GET /invoices/:id` + `/invoices/:id/pdf`, track `unpaid` status, and run a daily overdue job.
+- **What changed (backend):**
+  - `services/invoice-service.ts` (new) — 
+    - `ensureInvoiceForOrder(orderId)`: creates the unique-on-order invoice only for a `delivered` order (409 `INVALID_ORDER_STATUS` otherwise), reuses an existing one, computes `invoiceNumber` as a sequenced `INV-<year>-<seq>` (seed from a `startsWith` count), sets `issuedAt = now` and `dueDate = now + INVOICE_DUE_DAYS` (default 30d), status `unpaid`.
+    - `getInvoice(invoiceId, userId, role)` / `getInvoicePdf(...)`: load invoice + order (buyer/supplier/items), with `assertInvoiceAccess` — allowed only for the order's buyer or supplier (or admin); anyone else gets a symmetric 404 `INVOICE_NOT_FOUND`.
+    - `buildInvoicePdf`: renders an A4 PDF (pdf-lib) with invoice number/dates, bill-to/from blocks, an item table (qty, unit price, amount), currency total, and status.
+    - `markOverdueInvoices()`: `updateMany` unpaid invoices with `dueDate < now` → `overdue`.
+  - `routes/invoice-routes.ts` (new) — `GET /api/v1/invoices/:id` (JSON) and `GET /api/v1/invoices/:id/pdf` (application/pdf + Content-Disposition), both `requireAuth` only (access is decided by party, not fixed role).
+  - `app.ts` — registered `invoiceRoutes`.
+  - `supplier-order-service.ts` — on the `delivered` transition, calls `ensureInvoiceForOrder(order.id)` (best-effort, `.catch` logged so a delivery never rolls back; invoice can be regenerated via the standalone call).
+  - `jobs/overdue-invoices.ts` (new) + `index.ts` — `startOverdueInvoicesJob()` scans on a 24h interval in the real server only (not in tests, which use `buildApp`).
+  - Added `pdf-lib` dependency to `@coffee/api`.
+  - Tests: `services/invoice-service.test.ts` (6 tests) — invoice creation + sequencing + reuse + 409 on non-delivered; overdue marking; access controls; and PDF generation (`%PDF` magic + parseable).
+- **What changed (data):** `prisma/seed.ts` — `seedSuppliers()` adds 5 realistic distributor accounts (Mena Roasters, Fresh Dairy, CupWorks Packaging, Gourmet Syrups ME, HygienePro; password `password123`) with 20 products mapped to existing categories (prices in minor units), idempotent via user/email and product/(supplierId,sku) upserts. Committed separately as `2b07423`.
+- **Files touched:** apps/api/src/{services/invoice-service.ts, services/invoice-service.test.ts, routes/invoice-routes.ts, app.ts, index.ts, services/supplier-order-service.ts, jobs/overdue-invoices.ts, package.json}, apps/api/prisma/seed.ts, pnpm-lock.yaml
+- **Decisions made:**
+  - PDF is generated **on demand** in `/invoices/:id/pdf`; `pdfUrl` in the schema is left null for now (no S3/R2 wired in MVP). Keeps storage simple and PDF always fresh.
+  - Invoice is a symmetric resource visible to both order parties (buyer AND supplier), so routes use `requireAuth` + service-level party check rather than a fixed role guard.
+  - `ensureInvoiceForOrder` is idempotent (unique orderId) and safe to retry; the deliver hook is best-effort so delivery is never blocked if invoice generation hiccups.
+  - Invoice number sequence is derived from a `startsWith("INV-<year>-")` count — race-safe enough for MVP with the `@unique(invoiceNumber)` constraint backstopping collisions.
+- **Verification:** `pnpm lint`, `pnpm typecheck`, `pnpm test` (87 total: 74 api + 4 utils + 8 cart + 1 web), `pnpm build` all clean. Live smoke: placed → confirm → dispatch → deliver; invoice auto-generated (5/5 delivered orders have one, 0 missing); `GET /invoices/:id` returns invoice w/ buyer+supplier+items; `GET /invoices/:id/pdf` returns valid PDF 1.7 (1560 bytes, `%PDF`); supplier also downloads 200; stranger supplier → 404 `INVOICE_NOT_FOUND`; overdue job marked a backdated unpaid invoice `overdue` (then reverted). Dev servers left running (web :5173, api :3000). Seed re-ran: 6 suppliers, 25 products total.
+  - Note: tracked down a false scare where `GET /orders/:id` showed `invoice: null` — the order-detail endpoint intentionally does not embed the invoice; invoices are their own resource. Generation was confirmed in the DB directly.
+- **Next task:** W16 — Email notifications (Resend): dedicated templates for order placed / confirmed / dispatched / delivered / invoice due, replacing inline best-effort sends.
+
