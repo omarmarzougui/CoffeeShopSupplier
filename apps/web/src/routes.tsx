@@ -15,9 +15,12 @@ import { SupplierProfilePage } from "./pages/SupplierProfilePage";
 import { CartPage } from "./pages/CartPage";
 import { BuyerOrdersPage } from "./pages/BuyerOrdersPage";
 import { SupplierOrdersPage } from "./pages/SupplierOrdersPage";
+import { SupplierProductsPage } from "./pages/SupplierProductsPage";
+import { ProductsRedirect } from "./components/ProductsRedirect";
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomePage /> },
+  { path: "/products", element: <ProductsRedirect /> },
   {
     element: <PublicLayout />,
     children: [
@@ -53,6 +56,7 @@ export const router = createBrowserRouter([
             element: <SupplierLayout />,
             children: [
               { index: true, element: <SupplierDashboardPage /> },
+              { path: "products", element: <SupplierProductsPage /> },
               { path: "orders", element: <SupplierOrdersPage /> },
             ],
           },

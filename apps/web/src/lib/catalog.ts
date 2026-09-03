@@ -103,6 +103,35 @@ export async function fetchProduct(id: string): Promise<Product> {
   return apiFetch<Product>(`/api/v1/products/${id}`);
 }
 
+export interface CreateProductInput {
+  name: string;
+  sku: string;
+  categoryId: string;
+  unit: ProductUnit;
+  price: number;
+  currency?: string;
+  minOrderQty?: number;
+  leadTimeDays?: number;
+  stockAvailable?: boolean;
+  description?: string;
+  images?: string[];
+}
+
+export async function createProduct(input: CreateProductInput): Promise<Product> {
+  return apiFetch<Product>("/api/v1/products", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateProduct(
+  id: string,
+  input: Partial<CreateProductInput>,
+): Promise<Product> {
+  return apiFetch<Product>(`/api/v1/products/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function archiveProduct(id: string): Promise<{ success: boolean; id: string }> {
+  return apiFetch<{ success: boolean; id: string }>(`/api/v1/products/${id}`, { method: "DELETE" });
+}
+
 export async function fetchSupplier(id: string): Promise<SupplierProfile> {
   return apiFetch<SupplierProfile>(`/api/v1/suppliers/${id}`);
 }
