@@ -1,15 +1,15 @@
 import { create } from "zustand";
 import type { Role } from "@coffee/types";
 import {
-  clearRefreshToken,
-  clearToken,
-  clearUser,
+  clearSession,
   getStoredRefreshToken,
   getUserFromStorage,
+  refreshAccessToken,
+  restoreSession,
+  scheduleAutoRefresh,
   storeRefreshToken,
   storeToken,
   storeUser,
-  refreshAccessToken,
 } from "../lib/api";
 
 interface AuthUser {
@@ -22,28 +22,40 @@ interface AuthUser {
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isReady: boolean;
   login: (user: AuthUser, accessToken: string, refreshToken: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   refresh: () => Promise<void>;
-  initialize: () => void;
+  initialize: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
+  isReady: false,
 
   login(user, accessToken, refreshToken) {
     storeToken(accessToken);
     storeRefreshToken(refreshToken);
     storeUser(user);
     set({ user, isAuthenticated: true });
+    scheduleAutoRefresh();
   },
 
-  logout() {
-    clearToken();
-    clearRefreshToken();
-    clearUser();
-    set({ user: null, isAuthenticated: false });
+  async logout() {
+    const refreshToken = getStoredRefreshToken();
+    try {
+      if (refreshToken) {
+        await fetch("/api/v1/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
+      }
+    } finally {
+      clearSession();
+      set({ user: null, isAuthenticated: false });
+    }
   },
 
   async refresh() {
@@ -51,23 +63,27 @@ export const useAuthStore = create<AuthState>((set) => ({
       const tokens = await refreshAccessToken();
       storeToken(tokens.accessToken);
       storeRefreshToken(tokens.refreshToken);
+      scheduleAutoRefresh();
     } catch {
-      clearToken();
-      clearRefreshToken();
-      clearUser();
+      clearSession();
       set({ user: null, isAuthenticated: false });
     }
   },
 
-  initialize() {
-    const refreshToken = getStoredRefreshToken();
-    if (!refreshToken) {
-      set({ user: null, isAuthenticated: false });
-      return;
+  async initialize() {
+    if (get().isReady) return;
+
+    const ok = await restoreSession();
+
+    if (ok) {
+      const user = getUserFromStorage();
+      if (user) {
+        set({ user, isAuthenticated: true, isReady: true });
+        return;
+      }
     }
-    const user = getUserFromStorage();
-    if (user) {
-      set({ user, isAuthenticated: true });
-    }
+
+    clearSession();
+    set({ user: null, isAuthenticated: false, isReady: true });
   },
 }));

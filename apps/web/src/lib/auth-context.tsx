@@ -1,12 +1,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useAuthStore } from "../stores/auth-store";
 import type { AuthResponse } from "./api";
-import {
-  apiFetch,
-  clearRefreshToken,
-  clearToken,
-  clearUser,
-} from "./api";
+import { apiFetch, clearSession } from "./api";
 
 interface AuthContextValue {
   login: (email: string, password: string) => Promise<AuthResponse>;
@@ -32,8 +27,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
 
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    void initialize();
+
+    const onExpired = () => {
+      clearSession();
+      storeLogout();
+    };
+    window.addEventListener("auth:session-expired", onExpired);
+    return () => window.removeEventListener("auth:session-expired", onExpired);
+  }, [initialize, storeLogout]);
 
   const login = async (email: string, password: string): Promise<AuthResponse> => {
     const data = await apiFetch<AuthResponse>("/api/v1/auth/login", {
@@ -66,9 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     } finally {
-      clearToken();
-      clearRefreshToken();
-      clearUser();
+      clearSession();
       storeLogout();
     }
   };
