@@ -160,3 +160,102 @@
   - `Prisma.PrismaClientKnownRequestError` P2002 mapped to 409 `SKU_TAKEN`.
 - **Verification:** 24/24 tests; lint + typecheck clean. Live smoke with seeded supplier: login → create 200 → patch 200 (price updated in DB) → archive 200 (`archived=t`) → buyer token blocked 403. Smoke row cleaned up.
 - **Next task:** W8 — Product listing & search (GET with filters, Meilisearch index + sync, CSV export placeholder).
+
+---
+
+## 2026-09-02 — W8. Product listing & search
+
+- **Task:** W8 — GET `/api/v1/products` with filters, Meilisearch index + sync on create/update/archive, CSV export placeholder.
+- **What changed:**
+  - `lib/search.ts` — added `PRODUCT_INDEX` name, `ensureProductIndex()` (index settings), `indexProduct(doc)` (upsert), `removeProduct(id)` (delete), `searchProducts(query, options)` (text search with filters). All sync helpers fail open (catch + swallow) to keep the API available when Meilisearch is down.
+  - `schemas/product-schemas.ts` — added `listProductsQuerySchema`: optional `category`, `supplier` (UUIDs), `q` (text), `minPrice`/`maxPrice` (coerced int), `page`/`limit` (defaults 1/20), `sort` (`price_asc|price_desc|newest|oldest`). Exported `ListProductsQuery` type.
+  - `services/product-service.ts` — added `listProducts()` (DB-based with Prisma filters + pagination/sort); Meilisearch `q` search integrated via `searchProducts()` to find matching IDs when text query is provided. Added `toSearchDoc()` helper. Added `indexProduct()` call in `createProduct`/`updateProduct`, `removeProduct()` call in `archiveProduct`.
+  - `routes/product-routes.ts` — added `GET /api/v1/products` (auth required, Zod-validated query, calls `listProducts`), `GET /api/v1/products/export.csv` (placeholder CSV header row with `Content-Disposition` attachment).
+  - Tests: added 8 new route tests: listing returns paginated results (200), rejects unauth (401), passes category/supplier/price/sort filters to Prisma, paginates page+limit correctly, rejects invalid query (400), text search via Meilisearch with ID filtering (200), CSV export returns correct headers (200) + unauth (401). Meilisearch mock verifies sync on create/update/archive.
+- **Files touched:** `apps/api/src/lib/search.ts`, `apps/api/src/schemas/product-schemas.ts`, `apps/api/src/services/product-service.ts`, `apps/api/src/routes/product-routes.ts`, `apps/api/src/routes/product-routes.test.ts`
+- **Decisions made:**
+  - Meilisearch sync is fire-and-forget with try/catch swallowing — API never fails because Meilisearch is unavailable. Degraded behavior: full listing via Prisma DB still works, only text search (`q`) returns empty.
+  - Listing is auth-required (`requireAuth`): buyers and suppliers both need to authenticate to browse products. No anonymous catalog browsing in MVP.
+  - Text search (`q`) goes through Meilisearch; other filters (category, supplier, price range) go through Prisma DB directly. Meilisearch `q` results are IDs used to filter the DB query, ensuring consistent data.
+  - CSV export is a placeholder (header row only) — bulk export/import deferred to a later task as noted in TODO.
+  - `z.coerce.number()` for `minPrice`/`maxPrice` query params since URL query strings are strings; `z.coerce` handles both `?minPrice=1000` and `?minPrice="1000"` gracefully.
+- **Verification:** `pnpm lint` clean, `pnpm typecheck` clean, `pnpm test` 38/38 passed (33 api + 4 utils + 1 web). `pnpm build` both apps clean.
+- **Next task:** W9 — Web app foundation (router, layouts, Zustand/React Query, auth pages, token refresh interceptor).
+
+---
+
+## 2026-09-03 — W9. Web app foundation
+
+- **Task:** W9 — router/layouts, Zustand + React Query setup, auth pages (login/register), token refresh interceptor, protected/role routes.
+- **What changed:**
+  - `lib/api.ts` — fetch wrapper `apiFetch()` handling 401 retry via refresh token rotation (single-flight `refreshAccessToken`), token/user localStorage persistence helpers, SessionExpired → redirect to `/login`.
+  - `stores/auth-store.ts` — Zustand store (`user`, `isAuthenticated`, `login`, `logout`, `refresh`, `initialize`) syncing with localStorage.
+  - `lib/auth-context.tsx` — `AuthProvider` + `useAuth()`: `login`, `register`, `logout` (revokes refresh token server-side on logout).
+  - `components/ProtectedRoute.tsx` — guards authenticated access (redirects to `/login`). `RoleProtectedRoute.tsx` — guards role-specific areas (buyer vs supplier) with role-scoped redirects.
+  - `components/PublicLayout.tsx` — centered card layout for auth pages. `DashboardLayout.tsx` — sidebar + topbar shell (used by both roles). `BuyerLayout.tsx` / `SupplierLayout.tsx` — role-specific nav + outlet.
+  - `pages/` — `HomePage` (landing), `LoginPage`, `RegisterPage` (role toggle buyer/supplier, validation), `BuyerDashboardPage`, `SupplierDashboardPage` (placeholders).
+  - `routes.tsx` — `createBrowserRouter` with public `/`, public auth pages, protected `/buyer` (buyer role) + `/supplier` (supplier role), catch-all → `/`.
+  - `App.tsx` — `AuthProvider` + `RouterProvider`. `main.tsx` — simplified to render `<App />` inside `QueryClientProvider`.
+  - `package.json` — added `@coffee/types` workspace dep.
+- **Files touched:** apps/web/src/{App.tsx,main.tsx,routes.tsx,lib/api.ts,lib/auth-context.tsx,stores/auth-store.ts,components/{ProtectedRoute,RoleProtectedRoute,PublicLayout,DashboardLayout,BuyerLayout,SupplierLayout}.tsx,pages/{HomePage,LoginPage,RegisterPage,BuyerDashboardPage,SupplierDashboardPage}.tsx}, apps/web/package.json, pnpm-lock.yaml
+- **Decisions made:**
+  - Auth state persisted in `localStorage` (token + user + refresh token) for MVP — refresh rotation revokes server-side; no sessionStorage complexity.
+  - `apiFetch` uses single-flight refresh (`refreshPromise`) to prevent multiple concurrent 401 retries from triggering parallel refreshes.
+  - Role-based dashboards separated at route level (`/buyer`, `/supplier`) with `RoleProtectedRoute` — a buyer hitting `/supplier` redirects to `/buyer` and vice versa.
+  - Logout revokes refresh token server-side (POST `/auth/logout`) before clearing local state.
+  - HomePage redirects to `/` landing; login/register redirect to role-specific dashboard based on `user.role`.
+  - API 401 + refresh failure triggers hard redirect to `/login` (session expired).
+- **Verification:** `pnpm lint` / `pnpm typecheck` / `pnpm test` 38/38 passed; `pnpm build` clean (Vite build 104 modules). Live smoke: restarted API with correct Meilisearch key, created products → Meilisearch sync works, text search via `q=espresso` returns matches, archive removes from index; test data cleaned up. `app.ts` calls `ensureProductIndex()` at startup.
+- **Next task:** W10 — Catalog pages (buyer): category browsing, search, product detail, supplier profile page (basic).
+
+---
+
+## 2026-09-03 — W10. Catalog pages (buyer)
+
+- **Task:** W10 — buyer catalog: category browse, product search/list, product detail, supplier profile. Backend endpoints + frontend pages.
+- **What changed (backend):**
+  - `services/category-service.ts` — `listCategories()` returns a nested `CategoryNode` tree (parent → children) built from flat Prisma rows.
+  - `services/supplier-service.ts` — `getSupplierProfile()` returns `{ id, businessName, logoUrl, phone, address, verified, productCount }`; verifies the user is a `supplier` (404 otherwise); productCount counts non-archived products.
+  - `services/product-service.ts` — added `getPublicProduct(id)` returning a product with `category` + `supplier` relations included; 404 for archived/missing.
+  - `routes/category-routes.ts` — `GET /api/v1/categories` (auth). `routes/supplier-routes.ts` — `GET /api/v1/suppliers/:id` (auth).
+  - `routes/product-routes.ts` — added `GET /api/v1/products/:id` (public product detail, auth) registered after the static `/export.csv` route.
+  - `app.ts` — registered `categoryRoutes` and `supplierRoutes`.
+  - Tests: `routes/catalog-routes.test.ts` (6 tests) — category tree shape, product detail 200 + missing/archived 404, supplier profile 200+count, supplier profile 404 for non-supplier. All use mocked DB.
+- **What changed (frontend):**
+  - `lib/catalog.ts` — typed API client for `fetchCategories`, `fetchProducts` (builds query string + types), `fetchProduct`, `fetchSupplier`; export `ProductSort`, `Product`, `Category`, `SupplierProfile`, `ProductListResponse`.
+  - `pages/CatalogPage.tsx` — two-column browse page: left category tree (root + children, "All Products" link), right product grid with search input + sort dropdown (newest/price ASC/price DESC/oldest). Uses `useSearchParams` so `?category=`, `?supplier=`, `?sort=` are URL-driven and trigger re-fetch via React Query.
+  - `pages/ProductDetailPage.tsx` — product header (name, SKU, unit), price + MOQ, description, lead time, availability, supplier link.
+  - `pages/SupplierProfilePage.tsx` — avatar initial, business name, verified badge, product count, address/phone, "View all products" (links to catalog filtered by supplier).
+  - `routes.tsx` — added `buyer/products`, `buyer/products/:id`, `buyer/suppliers/:id` under the buyer role layout.
+  - `package.json` — added `@coffee/utils` workspace dep.
+- **Files touched (backend):** apps/api/src/{services/{category-service,supplier-service,product-service}.ts,routes/{category-routes,supplier-routes,product-routes}.ts,routes/catalog-routes.test.ts,app.ts}
+- **Files touched (frontend):** apps/web/src/{lib/catalog.ts,pages/{CatalogPage,ProductDetailPage,SupplierProfilePage}.tsx,routes.tsx,package.json}, pnpm-lock.yaml
+- **Decisions made:**
+  - Category tree built in-memory from a flat `findMany` (2-level taxonomy only in MVP; no recursive queries needed).
+  - `GET /api/v1/categories`, `GET /api/v1/products/:id`, `GET /api/v1/suppliers/:id` all require `requireAuth` (no anonymous browsing in this MVP).
+  - Product detail includes `category` + `supplier` relations via Prisma `include` for a single-roundtrip UI load.
+  - Supplier profile deliberately excludes email + vatId (public-facing; no data leak).
+  - URL-driven catalog filters (`useSearchParams`) so deep-linking/bookmarking works; React Query keys include the filters for caching.
+  - `.env.example` grows `MEILISEARCH_API_KEY=dev-master-key-change-me` (matches docker-compose dev master key) — documented.
+- **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean (44 tests: 39 api + 4 utils + 1 web; 110 modules web build). Live smoke: categories endpoint returns 7-root tree; product detail 200 with category+supplier relations; supplier profile 200 (verified, productCount); supplier filter on products works; test data cleaned up.
+- **Next task:** W11 — Cart (multi-supplier, client-side): cart store, per-supplier grouping, MOQ validation, totals in minor units.
+
+---
+
+## 2026-09-03 — W11. Cart (multi-supplier, client-side)
+
+- **Task:** W11 — client-side cart: Zustand store, per-supplier grouping, MOQ validation, minor-unit totals, `Add to Cart` on product detail, cart page + route + nav.
+- **What changed:**
+  - `stores/cart-store.ts` — Zustand store persisted to `localStorage` (`cart-storage`). `CartItem` holds productId, name, sku, unit, price, currency, minOrderQty, stockAvailable, quantity, supplierId, supplierName. Actions: `addItem` (respects MOQ, accumulates same product), `removeItem`, `updateQty` (0 removes), `clear`. Pure helpers: `groupCartItems` (groups by supplier, computes per-group subtotal in minor units + `hasBelowMoq` flag), `cartTotal` (totals grouped by currency), `cartItemCount`.
+  - `pages/ProductDetailPage.tsx` — added quantity stepper + `Add to cart` button (disabled when out of stock or qty chosen below MOQ), inline MOQ warning, "Added ✓" feedback, and a `View cart →` link.
+  - `pages/CartPage.tsx` — groups items per supplier in cards (supplier name, subtotal footer, per-supplier "View supplier" link), line items with quantity stepper, per-line MOQ warning + out-of-stock flag, per-line totals, aggregate "Total (currency)" block, empty-cart state, clear-cart action, disabled-for-now "Proceed to checkout" button (W12 wiring).
+  - `routes.tsx` — added `buyer/cart` under the buyer role layout.
+  - `components/BuyerLayout.tsx` — cart nav link already present; no change.
+- **Files touched:** apps/web/src/{stores/cart-store.ts,stores/cart-store.test.ts,pages/{ProductDetailPage,CartPage}.tsx,routes.tsx}
+- **Decisions made:**
+  - Cart is entirely **client-side** in MVP (persisted to localStorage), consistent with W12 splitting into per-supplier orders at checkout; no backend cart endpoint in this phase.
+  - `addItem`/`updateQty` clamp quantity to **at least the MOQ** on first add, but allow dropping *below* MOQ later (qty 0 removes) so a `hasBelowMoq` flag can surface a warning rather than hard-blocking. MOQ is also shown as inline UI warning on both detail and cart pages.
+  - All totals computed in **integer minor units** (price × qty); `formatMinorUnits` from `@coffee/utils` formats for display. Totals tracked per-currency (single currency in MVP).
+  - Quantity steppers are client-side hidden-input buttons (no native spinner) for consistent styling; still accessible via aria-labels.
+- **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean. 52 tests: 39 api + 4 utils + 8 cart-store + 1 web smoke. Cart store tests cover MOQ clamping on add, accumulation on re-add, update-qty-to-0 removal, remove, clear, grouping by supplier, per-currency totals, and `hasBelowMoq` detection. (Zustand persist logs a benign `storage is currently unavailable` warning in the Node test env; tests still pass.)
+- **Next task:** W12 — Order placement (buyer): POST `/api/v1/orders` splitting cart per supplier, server-side price re-validation, minor-unit totals, `pending` status + supplier email notification.

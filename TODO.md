@@ -44,19 +44,19 @@
   - Ownership enforced in service layer (`supplier_id === user`)
   - Fields: name, SKU, unit, price (minor units), MOQ, lead time, description, images, stock toggle
   - Zod request/response schemas; integration tests
-- [ ] **W8. Product listing & search**
+- [x] **W8. Product listing & search**
   - GET `/api/v1/products` with filters (category, supplier, q, price)
   - Meilisearch index + sync on product create/update
   - CSV export (bulk import deferred — keep endpoint placeholder)
 
 ### Week 5–6 — Buyer Browse & Search
 
-- [ ] **W9. Web app foundation**
+- [x] **W9. Web app foundation**
   - Router, layouts (buyer/supplier), Zustand + React Query setup, Tailwind theme
   - Auth pages (login/register), token refresh interceptor, protected routes
-- [ ] **W10. Catalog pages (buyer)**
+- [x] **W10. Catalog pages (buyer)**
   - Category browsing, search, product detail, supplier profile page (basic)
-- [ ] **W11. Cart (multi-supplier, client-side)**
+- [x] **W11. Cart (multi-supplier, client-side)**
   - Cart store, per-supplier grouping, MOQ validation, totals in minor units
 
 ### Week 7–8 — Orders

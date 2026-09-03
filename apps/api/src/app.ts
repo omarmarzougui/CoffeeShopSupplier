@@ -3,8 +3,11 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { checkDependencies } from "./lib/health.js";
 import { redis } from "./lib/redis.js";
+import { ensureProductIndex } from "./lib/search.js";
 import { authRoutes } from "./routes/auth-routes.js";
+import { categoryRoutes } from "./routes/category-routes.js";
 import { productRoutes } from "./routes/product-routes.js";
+import { supplierRoutes } from "./routes/supplier-routes.js";
 import { registerErrorHandler } from "./middleware/error-handler.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -25,7 +28,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.code(allUp ? 200 : 503).send({ status: allUp ? "ok" : "degraded", deps });
   });
 
+  try {
+    await ensureProductIndex();
+  } catch {
+    // Meilisearch unavailable at startup — sync will fail open on demand
+  }
+
   await app.register(authRoutes);
+  await app.register(categoryRoutes);
+  await app.register(supplierRoutes);
   await app.register(productRoutes);
 
   app.addHook("onClose", async () => {
