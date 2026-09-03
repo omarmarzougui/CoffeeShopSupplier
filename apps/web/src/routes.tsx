@@ -13,6 +13,8 @@ import { CatalogPage } from "./pages/CatalogPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { SupplierProfilePage } from "./pages/SupplierProfilePage";
 import { CartPage } from "./pages/CartPage";
+import { BuyerOrdersPage } from "./pages/BuyerOrdersPage";
+import { SupplierOrdersPage } from "./pages/SupplierOrdersPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomePage /> },
@@ -38,6 +40,7 @@ export const router = createBrowserRouter([
               { path: "products/:id", element: <ProductDetailPage /> },
               { path: "suppliers/:id", element: <SupplierProfilePage /> },
               { path: "cart", element: <CartPage /> },
+              { path: "orders", element: <BuyerOrdersPage /> },
             ],
           },
         ],
@@ -48,7 +51,10 @@ export const router = createBrowserRouter([
           {
             path: "/supplier",
             element: <SupplierLayout />,
-            children: [{ index: true, element: <SupplierDashboardPage /> }],
+            children: [
+              { index: true, element: <SupplierDashboardPage /> },
+              { path: "orders", element: <SupplierOrdersPage /> },
+            ],
           },
         ],
       },

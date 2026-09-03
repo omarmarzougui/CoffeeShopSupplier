@@ -310,3 +310,32 @@
   - Reorder of a cancelled order is allowed (it's a new purchase); cancel of a dispatched/delivered order is blocked.
 - **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean — 71 tests (58 api + 4 utils + 8 cart + 1 web). Live smoke: created a product, placed an order (7500 minor units), listed own orders + status filter, fetched by id (1 item), reordered → new pending order (7500), cancelled original → `cancelled` + `cancelledAt`, cancelled again → 409 `INVALID_ORDER_STATUS`. All smoke data (orders, items, W13 product) cleaned up; DB back to 0 orders / 0 items.
 - **Next task:** W14 — Supplier fulfillment: incoming orders dashboard API, confirm / dispatch / deliver transitions, enforce status machine (no skips) + ownership (order.supplier === user).
+
+---
+
+## 2026-09-03 — W14. Supplier fulfillment + order dashboards (web)
+
+- **Task:** W14 — supplier API to manage incoming orders (confirm/dispatch/deliver with strict status-machine + ownership), plus web UI for buyer order tracking and the supplier order dashboard.
+- **What changed (backend):**
+  - `services/supplier-order-service.ts` (new) — `listIncomingOrders(supplierId, query)` (status filter + pagination), `getIncomingOrder`, and a shared `transition(supplierId, orderId, to)` that:
+    - Guards ownership via `getOwnedOrder` (`ORDER_NOT_FOUND` 404 if missing or `order.supplierId !== user`).
+    - Enforces the **forward status machine** via a `FORWARD_TRANSITIONS` map: `pending→confirmed`, `confirmed→dispatched`, `dispatched→delivered`; `cancelled`/`delivered` have no forward moves. Illegal transition → 409 `INVALID_ORDER_STATUS`.
+    - Sets the corresponding timestamp (`confirmedAt`/`dispatchedAt`/`deliveredAt`) and emails the buyer (`Order <id> <status>`, best-effort).
+    - Exposes `confirmOrder`, `dispatchOrder`, `deliverOrder`.
+  - `routes/supplier-order-routes.ts` (new) — `GET /api/v1/supplier/orders`, `GET /api/v1/supplier/orders/:id`, `PATCH .../confirm`, `PATCH .../dispatch`, `PATCH .../deliver` — all `requireAuth` + supplier-only.
+  - `app.ts` — registered `supplierOrderRoutes`.
+  - Enriched order items in **both** buyer and supplier order list/get to include `product { name, sku, unit }` so dashboards can render product names (updated `order-service.ts` `listBuyerOrders`/`getOwnedOrder` and `supplier-order-service.ts`).
+  - Tests: `routes/supplier-order-routes.test.ts` (10 tests) — list incoming + buyer 403; get own 200 / other-supplier 404; confirm pending + buyer email; confirmed→dispatched; dispatched→delivered; skip (pending→dispatch) 409; re-confirm 409; other-supplier confirm 404.
+- **What changed (frontend):**
+  - `lib/orders.ts` (new) — typed client: buyer `listBuyerOrders`/`getBuyerOrder`/`cancelOrder`/`reorderOrder`; supplier `listSupplierOrders`/`confirmOrder`/`dispatchOrder`/`deliverOrder`; `Order`/`OrderItem`/`OrderStatus`/`OrderListResponse` types.
+  - `pages/BuyerOrdersPage.tsx` — buyer order tracking: status filter, order cards with items, Cancel (only when pending/confirmed) + Reorder actions, React Query mutations + invalidation.
+  - `pages/SupplierOrdersPage.tsx` — supplier dashboard: incoming orders with status filter, contextual action button per state (Confirm → Dispatch → Mark delivered).
+  - `routes.tsx` — wired `/buyer/orders` (BuyerOrdersPage) and `/supplier/orders` (SupplierOrdersPage). Nav links were already present in both layouts.
+- **Files touched:** apps/api/src/{services/supplier-order-service.ts,services/order-service.ts,routes/supplier-order-routes.ts,routes/supplier-order-routes.test.ts,app.ts}, apps/web/src/{lib/orders.ts,pages/{BuyerOrdersPage,SupplierOrdersPage}.tsx,routes.tsx}
+- **Decisions made:**
+  - All forward transitions go through one `transition()` helper with a declarative `FORWARD_TRANSITIONS` map — makes "no skipping" automatic and trivially auditable; `cancelled`/`delivered` intentionally block further forward moves.
+  - Ownership re-checked in the service on every transition (never trust client — mirrors buyer order rules); non-owners get symmetric 404.
+  - Email notifications driven from the API layer (confirm/dispatch/deliver → buyer), best-effort and non-blocking.
+  - Order items enriched with product name/sku/unit in list+get for both buyer and supplier views; kept `createOrders` output unchanged.
+- **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean — 81 tests (68 api + 4 utils + 8 cart + 1 web); web build 116 modules. Live smoke (dev servers): placed an order → supplier `GET /supplier/orders` lists it `pending`; `dispatch` from pending → 409 (no skip); `confirm` → confirmed + `confirmedAt`; re-`confirm` → 409; `dispatch` → dispatched; `deliver` → delivered; buyer emailed on each transition (confirmed/dispatched/delivered). All smoke data cleaned up (orders/items/W14 product removed). Dev servers left running (web :5173, api :3000, infra up).
+- **Next task:** W15 — Invoice generation: auto-generate invoice on `delivered`, invoice number sequence, PDF via pdf-lib, GET `/invoices/:id` + `/invoices/:id/pdf`, status `unpaid`, overdue daily job.

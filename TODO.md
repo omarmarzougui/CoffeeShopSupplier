@@ -68,7 +68,7 @@
 - [x] **W13. Buyer order management**
   - GET `/api/v1/orders` (own orders, filter/paginate), GET `/orders/:id`
   - Cancel (only from `pending`/`confirmed`); reorder endpoint
-- [ ] **W14. Supplier fulfillment**
+- [x] **W14. Supplier fulfillment**
   - Incoming orders dashboard API: confirm / dispatch / deliver transitions
   - Enforce status machine (no skips); ownership check (order.supplier_id === user)
   - Web UI for buyer order tracking + supplier order dashboard

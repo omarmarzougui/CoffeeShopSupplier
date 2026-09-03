@@ -8,6 +8,10 @@ interface CreateOrderResult {
   orders: (Order & { items: OrderItem[] })[];
 }
 
+type OrderItemWithProduct = OrderItem & {
+  product: { name: string; sku: string; unit: string };
+};
+
 const ORDER_NOT_FOUND = new AppError(404, "ORDER_NOT_FOUND", "Order not found");
 
 export async function createOrders(
@@ -104,7 +108,7 @@ export async function createOrders(
 }
 
 export interface OrderListResult {
-  items: (Order & { items: OrderItem[] })[];
+  items: (Order & { items: OrderItemWithProduct[] })[];
   total: number;
   page: number;
   limit: number;
@@ -125,7 +129,7 @@ export async function listBuyerOrders(
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: { items: true },
+      include: { items: { include: { product: { select: { name: true, sku: true, unit: true } } } } },
     }),
     db.order.count({ where }),
   ]);
@@ -135,10 +139,10 @@ export async function listBuyerOrders(
 async function getOwnedOrder(
   buyerId: string,
   orderId: string,
-): Promise<Order & { items: OrderItem[] }> {
+): Promise<Order & { items: OrderItemWithProduct[] }> {
   const order = await db.order.findUnique({
     where: { id: orderId },
-    include: { items: true },
+    include: { items: { include: { product: { select: { name: true, sku: true, unit: true } } } } },
   });
   if (!order || order.buyerId !== buyerId) {
     throw ORDER_NOT_FOUND;
@@ -149,7 +153,7 @@ async function getOwnedOrder(
 export async function getBuyerOrder(
   buyerId: string,
   orderId: string,
-): Promise<Order & { items: OrderItem[] }> {
+): Promise<Order & { items: OrderItemWithProduct[] }> {
   return getOwnedOrder(buyerId, orderId);
 }
 
