@@ -1,12 +1,14 @@
-import type { Order, OrderItem } from "@prisma/client";
+import type { Order, OrderItem, OrderStatus } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
 import { sendEmail } from "../lib/email.js";
-import type { CreateOrdersInput } from "../schemas/order-schemas.js";
+import type { CreateOrdersInput, ListOrdersQuery } from "../schemas/order-schemas.js";
 
 interface CreateOrderResult {
   orders: (Order & { items: OrderItem[] })[];
 }
+
+const ORDER_NOT_FOUND = new AppError(404, "ORDER_NOT_FOUND", "Order not found");
 
 export async function createOrders(
   buyerId: string,
@@ -100,3 +102,82 @@ export async function createOrders(
 
   return { orders };
 }
+
+export interface OrderListResult {
+  items: (Order & { items: OrderItem[] })[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export async function listBuyerOrders(
+  buyerId: string,
+  query: ListOrdersQuery,
+): Promise<OrderListResult> {
+  const { page, limit, status } = query;
+  const where = {
+    buyerId,
+    ...(status ? { status: status as OrderStatus } : {}),
+  };
+  const [items, total] = await Promise.all([
+    db.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: { items: true },
+    }),
+    db.order.count({ where }),
+  ]);
+  return { items, total, page, limit };
+}
+
+async function getOwnedOrder(
+  buyerId: string,
+  orderId: string,
+): Promise<Order & { items: OrderItem[] }> {
+  const order = await db.order.findUnique({
+    where: { id: orderId },
+    include: { items: true },
+  });
+  if (!order || order.buyerId !== buyerId) {
+    throw ORDER_NOT_FOUND;
+  }
+  return order;
+}
+
+export async function getBuyerOrder(
+  buyerId: string,
+  orderId: string,
+): Promise<Order & { items: OrderItem[] }> {
+  return getOwnedOrder(buyerId, orderId);
+}
+
+export async function cancelBuyerOrder(buyerId: string, orderId: string): Promise<Order> {
+  const order = await getOwnedOrder(buyerId, orderId);
+  if (order.status !== "pending" && order.status !== "confirmed") {
+    throw new AppError(
+      409,
+      "INVALID_ORDER_STATUS",
+      `Order cannot be cancelled from status "${order.status}"`,
+    );
+  }
+  const cancelled = await db.order.update({
+    where: { id: order.id },
+    data: { status: "cancelled", cancelledAt: new Date() },
+  });
+  return cancelled;
+}
+
+export async function reorderBuyerOrder(
+  buyerId: string,
+  orderId: string,
+): Promise<CreateOrderResult> {
+  const order = await getOwnedOrder(buyerId, orderId);
+  const items = order.items.map((i) => ({
+    productId: i.productId,
+    quantity: i.quantity,
+  }));
+  return createOrders(buyerId, { items });
+}
+

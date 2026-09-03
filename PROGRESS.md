@@ -286,3 +286,27 @@
   - Supplier email is best-effort and non-blocking (dev logs to console when no Resend key / in tests).
 - **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean — 60 tests (47 api + 4 utils + 8 cart + 1 web). Live smoke: created a 2-product cart spanning two suppliers → `POST /api/v1/orders` returned **two** orders (`pending`, totals 10000 and 9000 minor units) with correct items and per-supplier dev emails; below-MOQ → `BELOW_MINIMUM_ORDER_QTY` 400; supplier role → 403 FORBIDDEN. All smoke data (products, orders, second supplier) cleaned up afterward.
 - **Next task:** W13 — Buyer order management: GET `/api/v1/orders` (own, filter/paginate), GET `/api/v1/orders/:id`, cancel (pending/confirmed only), reorder endpoint.
+
+---
+
+## 2026-09-03 — W13. Buyer order management
+
+- **Task:** W13 — buyer endpoints to list own orders (filter/paginate), fetch a single order, cancel from `pending`/`confirmed`, and reorder from an existing order.
+- **What changed (backend):**
+  - `schemas/order-schemas.ts` — added `listOrdersQuerySchema` (`status` optional enum, `page`/`limit` with coerce + defaults matching the product-list convention) and `ListOrdersQuery` type.
+  - `services/order-service.ts` — added:
+    - `listBuyerOrders(buyerId, query)` — `db.order.findMany` scoped to `buyerId`, optional `status` filter, `createdAt desc`, paginated, includes items + `count`.
+    - `getOwnedOrder(buyerId, orderId)` — shared ownership guard; `ORDER_NOT_FOUND` 404 if missing OR `buyerId !== buyer`.
+    - `getBuyerOrder(buyerId, orderId)` — returns the owned order with items.
+    - `cancelBuyerOrder(buyerId, orderId)` — ownership check, then `INVALID_ORDER_STATUS` 409 unless `pending`/`confirmed`; sets `status: cancelled` + `cancelledAt`.
+    - `reorderBuyerOrder(buyerId, orderId)` — ownership check, maps the order's items into a `createOrders` input (reuses full availability/stock/MOQ validation + price snapping), returns the new order(s).
+  - `routes/order-routes.ts` — added `GET /api/v1/orders` (list, buyer), `GET /api/v1/orders/:id` (get, buyer), `POST /api/v1/orders/:id/cancel` (buyer), `POST /api/v1/orders/:id/reorder` (buyer); all `requireAuth` + buyer-only.
+  - Tests: extended `routes/order-routes.test.ts` (19 total: 8 order-placement + 11 new) — list own orders + status filter + pagination passed through, invalid status 400; get own 200, other-buyer 404, missing 404; cancel pending 200 / delivered 409 / other-buyer 404; reorder re-creates with same product+qty+price, other-buyer 404.
+- **Files touched:** apps/api/src/{schemas/order-schemas.ts,services/order-service.ts,routes/{order-routes.ts,order-routes.test.ts}}
+- **Decisions made:**
+  - Ownership enforced in the **service layer** (`getOwnedOrder`), never trusting the client; non-owners get a symmetric 404 (`ORDER_NOT_FOUND`) to avoid leaking whether an order exists.
+  - Cancel follows the order status machine strictly: allowed only from `pending`/`confirmed` per AGENTS.md; otherwise 409 `INVALID_ORDER_STATUS`.
+  - `reorder` reuses `createOrders` wholesale so a reorder re-validates archived/stock/MOQ and re-snaps to current DB prices (a reorder is a fresh order, not a copy of a stale price).
+  - Reorder of a cancelled order is allowed (it's a new purchase); cancel of a dispatched/delivered order is blocked.
+- **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean — 71 tests (58 api + 4 utils + 8 cart + 1 web). Live smoke: created a product, placed an order (7500 minor units), listed own orders + status filter, fetched by id (1 item), reordered → new pending order (7500), cancelled original → `cancelled` + `cancelledAt`, cancelled again → 409 `INVALID_ORDER_STATUS`. All smoke data (orders, items, W13 product) cleaned up; DB back to 0 orders / 0 items.
+- **Next task:** W14 — Supplier fulfillment: incoming orders dashboard API, confirm / dispatch / deliver transitions, enforce status machine (no skips) + ownership (order.supplier === user).

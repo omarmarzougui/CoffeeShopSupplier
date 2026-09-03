@@ -65,7 +65,7 @@
   - POST `/api/v1/orders` — cart split by supplier → one order per supplier
   - Price re-validation server-side at checkout; totals as integers
   - Status `pending`; email to supplier
-- [ ] **W13. Buyer order management**
+- [x] **W13. Buyer order management**
   - GET `/api/v1/orders` (own orders, filter/paginate), GET `/orders/:id`
   - Cancel (only from `pending`/`confirmed`); reorder endpoint
 - [ ] **W14. Supplier fulfillment**
