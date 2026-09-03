@@ -1,12 +1,41 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { formatMinorUnits } from "@coffee/utils";
+import { apiFetch } from "../lib/api";
 import { useCartStore, groupCartItems, cartTotal, cartItemCount } from "../stores/cart-store";
+
+interface OrderResponse {
+  orders: { id: string; supplierId: string; totalAmount: number; currency: string }[];
+}
 
 export function CartPage() {
   const items = useCartStore((s) => s.items);
   const updateQty = useCartStore((s) => s.updateQty);
   const removeItem = useCartStore((s) => s.removeItem);
   const clear = useCartStore((s) => s.clear);
+  const [placing, setPlacing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<OrderResponse | null>(null);
+
+  const handleCheckout = async () => {
+    setPlacing(true);
+    setError(null);
+    try {
+      const res = await apiFetch<OrderResponse>("/api/v1/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+        }),
+      });
+      setPlaced(res);
+      clear();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to place order");
+    } finally {
+      setPlacing(false);
+    }
+  };
 
   if (items.length === 0) {
     return (
@@ -151,8 +180,22 @@ export function CartPage() {
         <p className="mt-2 text-xs text-stone-500">
           Orders are placed and fulfilled per supplier.
         </p>
-        <button className="mt-4 w-full rounded-lg bg-amber-700 py-3 font-semibold text-white transition-colors hover:bg-amber-800">
-          Proceed to checkout
+        {placed && (
+          <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-800">
+            <span className="font-semibold">Order placed!</span>{" "}
+            {placed.orders.length} order{placed.orders.length === 1 ? "" : "s"} sent to your
+            supplier{placed.orders.length === 1 ? "" : "s"}.
+          </div>
+        )}
+        {error && (
+          <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        )}
+        <button
+          onClick={handleCheckout}
+          disabled={placing}
+          className="mt-4 w-full rounded-lg bg-amber-700 py-3 font-semibold text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {placing ? "Placing order..." : "Proceed to checkout"}
         </button>
       </div>
     </div>

@@ -259,3 +259,30 @@
   - Quantity steppers are client-side hidden-input buttons (no native spinner) for consistent styling; still accessible via aria-labels.
 - **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean. 52 tests: 39 api + 4 utils + 8 cart-store + 1 web smoke. Cart store tests cover MOQ clamping on add, accumulation on re-add, update-qty-to-0 removal, remove, clear, grouping by supplier, per-currency totals, and `hasBelowMoq` detection. (Zustand persist logs a benign `storage is currently unavailable` warning in the Node test env; tests still pass.)
 - **Next task:** W12 — Order placement (buyer): POST `/api/v1/orders` splitting cart per supplier, server-side price re-validation, minor-unit totals, `pending` status + supplier email notification.
+
+---
+
+## 2026-09-03 — W12. Order placement (buyer)
+
+- **Task:** W12 — POST `/api/v1/orders` placing one order per supplier from a cart, server-side re-validation (price from DB, stock, MOQ), integer minor-unit totals, `pending` status, supplier email notification.
+- **What changed (backend):**
+  - `schemas/order-schemas.ts` — `createOrdersSchema`: body `{ items: [{ productId (uuid), quantity (int > 0) }] }`, min 1 / max 100 items.
+  - `services/order-service.ts` — `createOrders(buyerId, input)`:
+    - Loads all products (with supplier) by id; `PRODUCT_NOT_AVAILABLE` 400 for missing/archived.
+    - Per-item server-side checks: `PRODUCT_OUT_OF_STOCK` (400), `BELOW_MINIMUM_ORDER_QTY` (qty < mart `minOrderQty`, 400).
+    - Groups items by supplier; creates **one Order per supplier** (status defaults `pending`) with `OrderItem`s inside a `db.$transaction`; `totalAmount` = sum of `unitPrice × quantity` in integer minor units, `unitPrice`/`subtotal` snapshot from DB price at order time.
+    - Sends `sendEmail` to the supplier's email (`New order <id>`) as best-effort (`.catch` swallows so order placement never fails on email).
+  - `routes/order-routes.ts` — `POST /api/v1/orders` with `requireAuth` + `requireRole("buyer")`; Zod body parse → `VALIDATION_ERROR` 400 on bad shape.
+  - `app.ts` — registered `orderRoutes`.
+  - Tests: `routes/order-routes.test.ts` (8 tests) — single-supplier order + supplier email (with `sendEmail` returning a promise), split into per-supplier orders, missing/archived product 400, out-of-stock 400, below-MOQ 400, invalid payload 400, supplier 403, unauthenticated 401. Uses mocked `db.product.findMany`, `db.$transaction` (inline callback with `dbMock` as tx), `db.order.create`.
+- **What changed (frontend):**
+  - `pages/CartPage.tsx` — "Proceed to checkout" now POSTs `{ items }` to `/api/v1/orders` via `apiFetch`, shows loading/error states, displays "Order placed!" with order count on success, and clears the cart.
+- **Files touched:** apps/api/src/{services/order-service.ts,schemas/order-schemas.ts,routes/{order-routes.ts,order-routes.test.ts},app.ts}, apps/web/src/pages/CartPage.tsx
+- **Decisions made:**
+  - **Server is the source of truth for price** — the client never sends a price; `unitPrice`/`subtotal`/`totalAmount` are derived from the DB product price at order time (protects against tampering / stale prices).
+  - Orders are **split per supplier** server-side from a flat item list; the client cart groups by supplier purely for display (W11), placement sends the flat list.
+  - Each per-supplier order is created in its own `$transaction` for atomic order+items; the whole request is NOT one big transaction (independent supplier orders shouldn't fail together). Order creation failure rolls back that supplier's items.
+  - Currency enforced implicitly by storing group currency from first item; full multi-currency group conflict handling deferred (single currency in MVP).
+  - Supplier email is best-effort and non-blocking (dev logs to console when no Resend key / in tests).
+- **Verification:** `pnpm lint`/`pnpm typecheck`/`pnpm test`/`pnpm build` all clean — 60 tests (47 api + 4 utils + 8 cart + 1 web). Live smoke: created a 2-product cart spanning two suppliers → `POST /api/v1/orders` returned **two** orders (`pending`, totals 10000 and 9000 minor units) with correct items and per-supplier dev emails; below-MOQ → `BELOW_MINIMUM_ORDER_QTY` 400; supplier role → 403 FORBIDDEN. All smoke data (products, orders, second supplier) cleaned up afterward.
+- **Next task:** W13 — Buyer order management: GET `/api/v1/orders` (own, filter/paginate), GET `/api/v1/orders/:id`, cancel (pending/confirmed only), reorder endpoint.

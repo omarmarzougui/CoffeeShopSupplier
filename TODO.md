@@ -61,7 +61,7 @@
 
 ### Week 7–8 — Orders
 
-- [ ] **W12. Order placement (buyer)**
+- [x] **W12. Order placement (buyer)**
   - POST `/api/v1/orders` — cart split by supplier → one order per supplier
   - Price re-validation server-side at checkout; totals as integers
   - Status `pending`; email to supplier
