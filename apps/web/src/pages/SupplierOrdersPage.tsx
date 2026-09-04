@@ -9,28 +9,20 @@ import {
   type Order,
   type OrderStatus,
 } from "../lib/orders";
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Pending",
-  confirmed: "Confirmed",
-  dispatched: "Dispatched",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
-
-const STATUS_STYLES: Record<OrderStatus, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  dispatched: "bg-indigo-100 text-indigo-800",
-  delivered: "bg-green-100 text-green-800",
-  cancelled: "bg-stone-200 text-stone-600",
-};
+import { PageHeader } from "../components/ui/page-header";
+import { Select } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { StatusBadge } from "../components/ui/badge";
+import { Card } from "../components/ui/card";
+import { Alert } from "../components/ui/alert";
+import { Skeleton } from "../components/ui/skeleton";
+import { EmptyState } from "../components/ui/empty-state";
 
 export function SupplierOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | "">("");
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["supplier-orders", status],
     queryFn: () => listSupplierOrders(status ? { status } : {}),
   });
@@ -48,32 +40,57 @@ export function SupplierOrdersPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["supplier-orders"] }),
   });
 
+  const anyError = (confirmMut.error ?? dispatchMut.error ?? deliverMut.error) as Error | null;
+
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-stone-800">Incoming Orders</h1>
+      <PageHeader
+        title="Incoming orders"
+        description="Confirm, dispatch and mark delivered — status moves forward with no skips."
+      />
 
-      <div className="mb-4 flex items-center gap-2">
-        <label className="text-sm text-stone-500">Filter:</label>
-        <select
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label htmlFor="supplier-status" className="text-xs font-medium text-stone-600">
+          Status
+        </label>
+        <Select
+          id="supplier-status"
           value={status}
           onChange={(e) => setStatus(e.target.value as OrderStatus | "")}
-          className="rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none"
+          className="w-44"
         >
-          <option value="">All</option>
+          <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
           <option value="dispatched">Dispatched</option>
           <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
-        </select>
+        </Select>
+        {anyError && <span className="text-xs text-red-600">{anyError.message}</span>}
       </div>
 
       {isLoading ? (
-        <p className="py-8 text-center text-stone-400">Loading orders...</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="mt-3 h-10 w-full" />
+            </Card>
+          ))}
+        </div>
+      ) : error ? (
+        <Alert variant="error">Failed to load orders — please try again.</Alert>
       ) : !data || data.items.length === 0 ? (
-        <p className="py-8 text-center text-stone-400">No orders found.</p>
+        <EmptyState
+          title="No orders yet"
+          description={
+            status
+              ? `No orders with status “${status}”.`
+              : "Incoming orders from buyers will appear here."
+          }
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {data.items.map((order) => (
             <IncomingOrderCard
               key={order.id}
@@ -81,6 +98,7 @@ export function SupplierOrdersPage() {
               onConfirm={(id) => confirmMut.mutate(id)}
               onDispatch={(id) => dispatchMut.mutate(id)}
               onDeliver={(id) => deliverMut.mutate(id)}
+              busy={confirmMut.isPending || dispatchMut.isPending || deliverMut.isPending}
             />
           ))}
         </div>
@@ -94,68 +112,72 @@ function IncomingOrderCard({
   onConfirm,
   onDispatch,
   onDeliver,
+  busy,
 }: {
   order: Order;
   onConfirm: (id: string) => void;
   onDispatch: (id: string) => void;
   onDeliver: (id: string) => void;
+  busy: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <span className="font-mono text-sm text-stone-500"># {order.id.slice(0, 8)}</span>
-          <span
-            className={`ml-3 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status]}`}
-          >
-            {STATUS_LABEL[order.status]}
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs text-stone-500" title={order.id}>
+            #{order.id.slice(0, 8)}
+          </span>
+          <StatusBadge status={order.status} />
+          <span className="text-xs text-stone-400">
+            {new Date(order.createdAt).toLocaleDateString()}
           </span>
         </div>
-        <span className="font-bold text-amber-700">
+        <span className="text-sm font-semibold tabular-nums text-stone-900">
           {formatMinorUnits(order.totalAmount, order.currency)}
         </span>
       </div>
 
-      <ul className="mt-3 divide-y divide-stone-100 text-sm">
+      <ul className="mt-3 divide-y divide-stone-100 rounded-md border border-stone-100">
         {order.items.map((item) => (
-          <li key={item.id} className="flex items-center justify-between py-2">
-            <div>
+          <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <div className="min-w-0">
               <span className="font-medium text-stone-800">{item.product.name}</span>
-              <span className="ml-2 text-stone-400">
+              <span className="ml-2 text-xs tabular-nums text-stone-500">
                 {item.quantity} × {formatMinorUnits(item.unitPrice, order.currency)}
               </span>
             </div>
-            <span className="text-stone-600">{formatMinorUnits(item.subtotal, order.currency)}</span>
+            <span className="shrink-0 tabular-nums text-stone-700">
+              {formatMinorUnits(item.subtotal, order.currency)}
+            </span>
           </li>
         ))}
       </ul>
 
-      <div className="mt-3 flex items-center gap-2 border-t border-stone-100 pt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
         {order.status === "pending" && (
-          <button
-            onClick={() => onConfirm(order.id)}
-            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-          >
-            Confirm
-          </button>
+          <Button size="sm" onClick={() => onConfirm(order.id)} disabled={busy}>
+            Confirm order
+          </Button>
         )}
         {order.status === "confirmed" && (
-          <button
-            onClick={() => onDispatch(order.id)}
-            className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800"
-          >
-            Dispatch
-          </button>
+          <Button size="sm" onClick={() => onDispatch(order.id)} disabled={busy}>
+            Mark dispatched
+          </Button>
         )}
         {order.status === "dispatched" && (
-          <button
-            onClick={() => onDeliver(order.id)}
-            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
-          >
+          <Button size="sm" onClick={() => onDeliver(order.id)} disabled={busy}>
             Mark delivered
-          </button>
+          </Button>
+        )}
+        {order.status === "delivered" && (
+          <span className="inline-flex h-8 items-center text-xs text-stone-500">
+            Delivered — invoice generated
+          </span>
+        )}
+        {order.status === "cancelled" && (
+          <span className="inline-flex h-8 items-center text-xs text-stone-500">Cancelled</span>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

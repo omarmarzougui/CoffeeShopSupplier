@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
+import { Input, Label } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { Alert } from "../components/ui/alert";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -31,48 +34,49 @@ export function LoginPage() {
 
   return (
     <div>
-      <h2 className="mb-6 text-xl font-semibold text-stone-800">Sign in</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium text-stone-700">
+      <h2 className="text-base font-semibold text-stone-900">Sign in</h2>
+      <p className="mt-1 text-sm text-stone-500">Enter your credentials to continue.</p>
+
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="email" required>
             Email
-          </label>
-          <input
+          </Label>
+          <Input
             id="email"
             type="email"
             required
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+            placeholder="you@company.com"
           />
         </div>
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm font-medium text-stone-700">
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password" required>
             Password
-          </label>
-          <input
+          </Label>
+          <Input
             id="password"
             type="password"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
           />
         </div>
-        {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
-        >
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
+
+        {error && <Alert variant="error">{error}</Alert>}
+
+        <Button type="submit" disabled={loading} className="w-full">
+          {loading ? "Signing in…" : "Sign in"}
+        </Button>
       </form>
+
       <p className="mt-6 text-center text-sm text-stone-500">
         Don&apos;t have an account?{" "}
-        <Link to="/register" className="font-medium text-amber-700 hover:underline">
+        <Link to="/register" className="font-medium text-stone-900 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-900">
           Create one
         </Link>
       </p>

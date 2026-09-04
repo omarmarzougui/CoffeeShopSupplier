@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
+import { Input, Label } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { Alert } from "../components/ui/alert";
 
 export function RegisterPage() {
   const { register } = useAuth();
@@ -33,102 +36,117 @@ export function RegisterPage() {
     }
   };
 
-  const roleOptions: { value: "buyer" | "supplier"; label: string }[] = [
-    { value: "buyer", label: "I'm a Coffee Shop" },
-    { value: "supplier", label: "I'm a Supplier" },
+  const roleOptions: { value: "buyer" | "supplier"; label: string; hint: string }[] = [
+    { value: "buyer", label: "Coffee Shop", hint: "I buy supplies" },
+    { value: "supplier", label: "Supplier", hint: "I sell supplies" },
   ];
 
   return (
     <div>
-      <h2 className="mb-6 text-xl font-semibold text-stone-800">Create account</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <span className="mb-1 block text-sm font-medium text-stone-700">I am</span>
-          <div className="grid grid-cols-2 gap-2">
+      <h2 className="text-base font-semibold text-stone-900">Create account</h2>
+      <p className="mt-1 text-sm text-stone-500">Choose your workspace type.</p>
+
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="space-y-2">
+          <Label required>I am</Label>
+          <div
+            role="radiogroup"
+            aria-label="Account type"
+            className="grid grid-cols-2 gap-2"
+          >
             {roleOptions.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
+                role="radio"
+                aria-checked={role === opt.value}
                 onClick={() => setRole(opt.value)}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                className={`rounded-md border px-3 py-3 text-left transition-colors ${
                   role === opt.value
-                    ? "border-amber-700 bg-amber-700 text-white"
-                    : "border-stone-300 text-stone-700 hover:border-amber-600"
+                    ? "border-stone-900 bg-stone-900 text-white"
+                    : "border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50"
                 }`}
               >
-                {opt.label}
+                <span className="block text-sm font-medium">{opt.label}</span>
+                <span
+                  className={`block text-xs ${role === opt.value ? "text-stone-300" : "text-stone-500"}`}
+                >
+                  {opt.hint}
+                </span>
               </button>
             ))}
           </div>
         </div>
-        <div>
-          <label htmlFor="businessName" className="mb-1 block text-sm font-medium text-stone-700">
+
+        <div className="space-y-1.5">
+          <Label htmlFor="businessName" required>
             Business name
-          </label>
-          <input
+          </Label>
+          <Input
             id="businessName"
             type="text"
             required
             minLength={2}
+            autoComplete="organization"
             value={businessName}
             onChange={(e) => setBusinessName(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+            placeholder="e.g. Central Roasters"
           />
         </div>
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium text-stone-700">
+
+        <div className="space-y-1.5">
+          <Label htmlFor="email" required>
             Email
-          </label>
-          <input
+          </Label>
+          <Input
             id="email"
             type="email"
             required
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+            placeholder="you@company.com"
           />
         </div>
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm font-medium text-stone-700">
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password" required>
             Password
-          </label>
-          <input
+          </Label>
+          <Input
             id="password"
             type="password"
             required
             minLength={8}
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
           />
-          <p className="mt-1 text-xs text-stone-400">At least 8 characters</p>
+          <p className="text-xs text-stone-500">At least 8 characters</p>
         </div>
-        <div>
-          <label htmlFor="phone" className="mb-1 block text-sm font-medium text-stone-700">
-            Phone <span className="text-stone-400">(optional)</span>
-          </label>
-          <input
+
+        <div className="space-y-1.5">
+          <Label htmlFor="phone">Phone <span className="font-normal text-stone-400">(optional)</span></Label>
+          <Input
             id="phone"
             type="tel"
+            autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+            placeholder="+216 …"
           />
         </div>
-        {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
-        >
-          {loading ? "Creating account..." : "Create account"}
-        </button>
+
+        {error && <Alert variant="error">{error}</Alert>}
+
+        <Button type="submit" disabled={loading} className="w-full">
+          {loading ? "Creating account…" : "Create account"}
+        </Button>
       </form>
+
       <p className="mt-6 text-center text-sm text-stone-500">
         Already have an account?{" "}
-        <Link to="/login" className="font-medium text-amber-700 hover:underline">
+        <Link to="/login" className="font-medium text-stone-900 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-900">
           Sign in
         </Link>
       </p>

@@ -10,7 +10,7 @@ const buyerNav = [
 
 export function BuyerLayout() {
   return (
-    <DashboardLayout roleLabel="Buyer" navLinks={buyerNav}>
+    <DashboardLayout roleLabel="Buyer workspace" navLinks={buyerNav}>
       <Outlet />
     </DashboardLayout>
   );

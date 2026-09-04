@@ -9,8 +9,8 @@ export function RoleProtectedRoute({ roles }: { roles: Role[] }) {
 
   if (!isReady) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">Loading...</div>
+      <div className="flex h-screen items-center justify-center bg-stone-50" role="status" aria-live="polite" aria-busy="true">
+        <div className="text-sm text-stone-500">Loading…</div>
       </div>
     );
   }

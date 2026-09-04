@@ -4,6 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { formatMinorUnits } from "@coffee/utils";
 import { fetchProduct } from "../lib/catalog";
 import { useCartStore } from "../stores/cart-store";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Card } from "../components/ui/card";
+import { Alert } from "../components/ui/alert";
+import { QuantityStepper } from "../components/ui/quantity-stepper";
+import { Skeleton } from "../components/ui/skeleton";
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,145 +24,150 @@ export function ProductDetailPage() {
   });
 
   if (isLoading) {
-    return <p className="py-8 text-center text-stone-400">Loading...</p>;
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
   }
 
   if (error || !product) {
     return (
-      <div className="py-8 text-center">
-        <p className="mb-4 text-stone-500">Product not found.</p>
-        <Link to="/buyer/products" className="text-amber-700 underline">
+      <div className="mx-auto max-w-3xl py-12 text-center">
+        <h1 className="text-sm font-semibold text-stone-900">Product not found</h1>
+        <p className="mt-1 text-sm text-stone-500">It may have been archived or removed.</p>
+        <Link
+          to="/buyer/products"
+          className="mt-4 inline-flex text-sm font-medium text-stone-900 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-900"
+        >
           Back to catalog
         </Link>
       </div>
     );
   }
 
+  const belowMoq = qty > 0 && qty < product.minOrderQty;
+  const canAdd = product.stockAvailable && !belowMoq && qty > 0;
+
   return (
     <div className="mx-auto max-w-3xl">
-      <Link to="/buyer/products" className="mb-4 inline-block text-sm text-amber-700 underline">
-        ← Back to catalog
+      <Link
+        to="/buyer/products"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-900"
+      >
+        <span aria-hidden>←</span> Back to catalog
       </Link>
-      <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
-        <div className="flex h-56 items-center justify-center bg-stone-100 text-6xl" aria-hidden>
-          ☕
-        </div>
-        <div className="p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-stone-900">{product.name}</h1>
-              <p className="mt-1 text-sm text-stone-500">
-                SKU: {product.sku} · per {product.unit}
+
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-stone-200 bg-stone-50 px-6 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold tracking-tight text-stone-900">{product.name}</h1>
+              <p className="mt-1 text-xs text-stone-500">
+                SKU {product.sku} · per {product.unit} · MOQ {product.minOrderQty}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-amber-700">
+              <p className="text-lg font-semibold tabular-nums text-stone-900">
                 {formatMinorUnits(product.price, product.currency)}
               </p>
-              <p className="text-xs text-stone-500">MOQ {product.minOrderQty} {product.unit}</p>
+              <p className="text-xs text-stone-500">per {product.unit}</p>
             </div>
           </div>
+        </div>
 
+        <div className="space-y-5 p-6">
           {product.description && (
-            <p className="mt-4 text-stone-700">{product.description}</p>
+            <p className="text-sm leading-6 text-stone-700">{product.description}</p>
           )}
 
-          <div className="mt-6 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-sm">
+          <dl className="grid grid-cols-2 gap-4 rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-sm">
             <div>
-              <span className="text-stone-500">Lead time:</span>{" "}
-              <span className="font-medium text-stone-800">
+              <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">Lead time</dt>
+              <dd className="mt-1 font-medium text-stone-900">
                 {product.leadTimeDays} day{product.leadTimeDays === 1 ? "" : "s"}
-              </span>
+              </dd>
             </div>
             <div>
-              <span className="text-stone-500">Availability:</span>{" "}
-              <span
-                className={`font-medium ${product.stockAvailable ? "text-green-700" : "text-red-600"}`}
-              >
-                {product.stockAvailable ? "In stock" : "Out of stock"}
-              </span>
+              <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">Availability</dt>
+              <dd className="mt-1">
+                {product.stockAvailable ? (
+                  <Badge variant="success" dot>
+                    In stock
+                  </Badge>
+                ) : (
+                  <Badge variant="danger">Out of stock</Badge>
+                )}
+              </dd>
             </div>
-          </div>
+          </dl>
 
           {product.supplier && (
-            <div className="mt-6 border-t border-stone-100 pt-4">
+            <div className="flex items-center justify-between rounded-md border border-stone-200 px-4 py-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Supplier</p>
+                <p className="mt-1 text-sm font-medium text-stone-900">{product.supplier.businessName}</p>
+              </div>
               <Link
                 to={`/buyer/suppliers/${product.supplier.id}`}
-                className="text-sm font-medium text-amber-700 hover:underline"
+                className="text-sm font-medium text-stone-900 underline decoration-stone-300 underline-offset-4 hover:decoration-stone-900"
               >
-                View {product.supplier.businessName} →
+                View profile
               </Link>
             </div>
           )}
 
-          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-stone-100 pt-4">
-            <div className="flex items-center rounded-lg border border-stone-300">
-              <button
-                onClick={() => setQty((q) => Math.max(0, q - 1))}
-                className="px-3 py-2 text-lg text-stone-500 hover:text-stone-900"
-                aria-label="Decrease quantity"
-              >
-                −
-              </button>
-              <input
-                type="number"
-                min={0}
-                value={qty}
-                onChange={(e) => setQty(Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-16 border-x border-stone-300 py-2 text-center text-sm focus:outline-none"
-                aria-label="Quantity"
-              />
-              <button
-                onClick={() => setQty((q) => q + 1)}
-                className="px-3 py-2 text-lg text-stone-500 hover:text-stone-900"
-                aria-label="Increase quantity"
-              >
-                +
-              </button>
-            </div>
-            <button
+          <div className="flex flex-wrap items-center gap-3 border-t border-stone-200 pt-5">
+            <QuantityStepper value={qty} onChange={setQty} min={0} ariaLabel="Quantity" />
+            <Button
               onClick={() => {
-                if (product.supplier) {
-                  addItem(
-                    {
-                      productId: product.id,
-                      name: product.name,
-                      sku: product.sku,
-                      unit: product.unit,
-                      price: product.price,
-                      currency: product.currency,
-                      minOrderQty: product.minOrderQty,
-                      stockAvailable: product.stockAvailable,
-                      supplierId: product.supplier.id,
-                      supplierName: product.supplier.businessName,
-                    },
-                    qty,
-                  );
-                  setAdded(true);
-                  setTimeout(() => setAdded(false), 2000);
-                }
+                if (!product.supplier) return;
+                addItem(
+                  {
+                    productId: product.id,
+                    name: product.name,
+                    sku: product.sku,
+                    unit: product.unit,
+                    price: product.price,
+                    currency: product.currency,
+                    minOrderQty: product.minOrderQty,
+                    stockAvailable: product.stockAvailable,
+                    supplierId: product.supplier.id,
+                    supplierName: product.supplier.businessName,
+                  },
+                  qty,
+                );
+                setAdded(true);
+                setTimeout(() => setAdded(false), 2000);
               }}
-              disabled={!product.stockAvailable || (qty > 0 && qty < product.minOrderQty)}
-              className="rounded-lg bg-amber-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!canAdd || !product.stockAvailable}
             >
               {added ? "Added ✓" : "Add to cart"}
-            </button>
-            {qty > 0 && qty < product.minOrderQty && (
-              <span className="text-xs text-red-600">
-                MOQ is {product.minOrderQty} {product.unit}
-              </span>
-            )}
+            </Button>
+
             {product.stockAvailable && (
               <Link
                 to="/buyer/cart"
-                className="ml-auto text-sm font-medium text-amber-700 underline"
+                className="text-sm font-medium text-stone-600 underline decoration-stone-300 underline-offset-4 hover:text-stone-900 hover:decoration-stone-900"
               >
-                View cart →
+                View cart
               </Link>
             )}
           </div>
+
+          {belowMoq && (
+            <Alert variant="warning">
+              Minimum order is {product.minOrderQty} {product.unit}. Increase quantity to add to cart.
+            </Alert>
+          )}
+          {!product.stockAvailable && <Alert variant="error">This product is currently out of stock.</Alert>}
+          {qty === 0 && product.stockAvailable && (
+            <p className="text-xs text-stone-500">Select a quantity to add to cart.</p>
+          )}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

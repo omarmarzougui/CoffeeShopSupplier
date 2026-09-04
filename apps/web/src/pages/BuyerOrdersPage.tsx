@@ -1,35 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatMinorUnits } from "@coffee/utils";
-import {
-  listBuyerOrders,
-  cancelOrder,
-  reorderOrder,
-  type Order,
-  type OrderStatus,
-} from "../lib/orders";
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Pending",
-  confirmed: "Confirmed",
-  dispatched: "Dispatched",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-};
-
-const STATUS_STYLES: Record<OrderStatus, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  dispatched: "bg-indigo-100 text-indigo-800",
-  delivered: "bg-green-100 text-green-800",
-  cancelled: "bg-stone-200 text-stone-600",
-};
+import { listBuyerOrders, cancelOrder, reorderOrder, type Order, type OrderStatus } from "../lib/orders";
+import { PageHeader } from "../components/ui/page-header";
+import { Select } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { StatusBadge } from "../components/ui/badge";
+import { Card } from "../components/ui/card";
+import { Alert } from "../components/ui/alert";
+import { Skeleton } from "../components/ui/skeleton";
+import { EmptyState } from "../components/ui/empty-state";
 
 export function BuyerOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | "">("");
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["buyer-orders", status],
     queryFn: () => listBuyerOrders(status ? { status } : {}),
   });
@@ -46,36 +32,66 @@ export function BuyerOrdersPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-stone-800">My Orders</h1>
+      <PageHeader
+        title="My orders"
+        description="Track status, cancel pending orders or reorder quickly."
+      />
 
-      <div className="mb-4 flex items-center gap-2">
-        <label className="text-sm text-stone-500">Filter:</label>
-        <select
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label htmlFor="buyer-status" className="text-xs font-medium text-stone-600">
+          Status
+        </label>
+        <Select
+          id="buyer-status"
           value={status}
           onChange={(e) => setStatus(e.target.value as OrderStatus | "")}
-          className="rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none"
+          className="w-44"
         >
-          <option value="">All</option>
+          <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
           <option value="dispatched">Dispatched</option>
           <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
-        </select>
+        </Select>
+        {(cancelMut.error || reorderMut.error) && (
+          <span className="text-xs text-red-600">
+            {(cancelMut.error as Error)?.message ?? (reorderMut.error as Error)?.message}
+          </span>
+        )}
       </div>
 
       {isLoading ? (
-        <p className="py-8 text-center text-stone-400">Loading orders...</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="mt-3 h-10 w-full" />
+            </Card>
+          ))}
+        </div>
+      ) : error ? (
+        <Alert variant="error">Failed to load orders — please try again.</Alert>
       ) : !data || data.items.length === 0 ? (
-        <p className="py-8 text-center text-stone-400">No orders found.</p>
+        <EmptyState
+          title="No orders found"
+          description={
+            status
+              ? `No orders with status “${status}”. Try a different filter.`
+              : "Orders you place will appear here. Start from the catalog."
+          }
+          action={!status ? { label: "Browse catalog", to: "/buyer/products" } : undefined}
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {data.items.map((order) => (
             <OrderCard
               key={order.id}
               order={order}
               onCancel={(id) => cancelMut.mutate(id)}
               onReorder={(id) => reorderMut.mutate(id)}
+              cancelling={cancelMut.isPending}
+              reordering={reorderMut.isPending}
             />
           ))}
         </div>
@@ -88,59 +104,60 @@ function OrderCard({
   order,
   onCancel,
   onReorder,
+  cancelling,
+  reordering,
 }: {
   order: Order;
   onCancel: (id: string) => void;
   onReorder: (id: string) => void;
+  cancelling: boolean;
+  reordering: boolean;
 }) {
   const cancellable = order.status === "pending" || order.status === "confirmed";
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <span className="font-mono text-sm text-stone-500"># {order.id.slice(0, 8)}</span>
-          <span
-            className={`ml-3 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status]}`}
-          >
-            {STATUS_LABEL[order.status]}
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs text-stone-500" title={order.id}>
+            #{order.id.slice(0, 8)}
+          </span>
+          <StatusBadge status={order.status} />
+          <span className="text-xs text-stone-400">
+            {new Date(order.createdAt).toLocaleDateString()}
           </span>
         </div>
-        <span className="font-bold text-amber-700">
+        <span className="text-sm font-semibold tabular-nums text-stone-900">
           {formatMinorUnits(order.totalAmount, order.currency)}
         </span>
       </div>
 
-      <ul className="mt-3 divide-y divide-stone-100 text-sm">
+      <ul className="mt-3 divide-y divide-stone-100 rounded-md border border-stone-100">
         {order.items.map((item) => (
-          <li key={item.id} className="flex items-center justify-between py-2">
-            <div>
+          <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <div className="min-w-0">
               <span className="font-medium text-stone-800">{item.product.name}</span>
-              <span className="ml-2 text-stone-400">
+              <span className="ml-2 text-xs tabular-nums text-stone-500">
                 {item.quantity} × {formatMinorUnits(item.unitPrice, order.currency)}
               </span>
             </div>
-            <span className="text-stone-600">{formatMinorUnits(item.subtotal, order.currency)}</span>
+            <span className="shrink-0 tabular-nums text-stone-700">
+              {formatMinorUnits(item.subtotal, order.currency)}
+            </span>
           </li>
         ))}
       </ul>
 
-      <div className="mt-3 flex items-center gap-2 border-t border-stone-100 pt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
         {cancellable && (
-          <button
-            onClick={() => onCancel(order.id)}
-            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-          >
-            Cancel order
-          </button>
+          <Button variant="danger" size="sm" onClick={() => onCancel(order.id)} disabled={cancelling}>
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </Button>
         )}
-        <button
-          onClick={() => onReorder(order.id)}
-          className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
-        >
-          Reorder
-        </button>
+        <Button variant="secondary" size="sm" onClick={() => onReorder(order.id)} disabled={reordering}>
+          {reordering ? "Reordering…" : "Reorder"}
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
