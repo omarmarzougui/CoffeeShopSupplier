@@ -1,0 +1,604 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CoffeeShopSupplier API",
+    "description": "B2B marketplace connecting coffee shop buyers with product suppliers.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Development" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Register a new buyer or supplier account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "role", "businessName"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 8, "maxLength": 128 },
+                  "role": { "type": "string", "enum": ["buyer", "supplier"] },
+                  "businessName": { "type": "string", "minLength": 2, "maxLength": 200 },
+                  "phone": { "type": "string", "maxLength": 30 },
+                  "address": { "type": "string", "maxLength": 500 },
+                  "vatId": { "type": "string", "maxLength": 50 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registration successful",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "409": { "description": "Email already taken" }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Login with email and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "401": { "description": "Invalid credentials", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Refresh access token using refresh token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["refreshToken"], "properties": { "refreshToken": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Token refreshed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshResponse" } } } },
+          "401": { "description": "Invalid or expired refresh token" }
+        }
+      }
+    },
+    "/api/v1/auth/verify": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Verify email address with verification token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["email", "token"], "properties": { "email": { "type": "string" }, "token": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "Email verified" },
+          "400": { "description": "Invalid input" },
+          "401": { "description": "Invalid verification token" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Logout and revoke refresh token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["refreshToken"], "properties": { "refreshToken": { "type": "string" } } } } }
+        },
+        "responses": { "200": { "description": "Logged out" } }
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": ["catalog"],
+        "summary": "List category tree",
+        "responses": {
+          "200": { "description": "Category tree", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } } } } }
+        }
+      }
+    },
+    "/api/v1/suppliers/{id}": {
+      "get": {
+        "tags": ["suppliers"],
+        "summary": "Get supplier public profile",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Supplier profile", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SupplierProfile" } } } },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": ["products"],
+        "summary": "List and search products (catalog)",
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "supplier", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } },
+          { "name": "minPrice", "in": "query", "schema": { "type": "integer" } },
+          { "name": "maxPrice", "in": "query", "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["price_asc", "price_desc", "newest", "oldest"] } }
+        ],
+        "responses": {
+          "200": { "description": "Product list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductList" } } } }
+        }
+      },
+      "post": {
+        "tags": ["products"],
+        "summary": "Create a new product (supplier only)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateProductInput" } } }
+        },
+        "responses": {
+          "200": { "description": "Product created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Product" } } } },
+          "403": { "description": "Supplier role required" }
+        }
+      }
+    },
+    "/api/v1/products/export.csv": {
+      "get": {
+        "tags": ["products"],
+        "summary": "Export products as CSV",
+        "responses": { "200": { "description": "CSV file", "content": { "text/csv": { "schema": { "type": "string" } } } } }
+      }
+    },
+    "/api/v1/products/{id}": {
+      "get": {
+        "tags": ["products"],
+        "summary": "Get product detail",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Product detail", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Product" } } } },
+          "404": { "description": "Not found" }
+        }
+      },
+      "patch": {
+        "tags": ["products"],
+        "summary": "Update a product (owner only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateProductInput" } } }
+        },
+        "responses": {
+          "200": { "description": "Product updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Product" } } } },
+          "403": { "description": "Not product owner" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "delete": {
+        "tags": ["products"],
+        "summary": "Archive a product (owner only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Product archived" },
+          "403": { "description": "Not product owner" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "get": {
+        "tags": ["orders"],
+        "summary": "List buyer's orders",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "confirmed", "dispatched", "delivered", "cancelled"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Order list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderList" } } } }
+        }
+      },
+      "post": {
+        "tags": ["orders"],
+        "summary": "Place a new order (buyer only)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateOrderInput" } } }
+        },
+        "responses": {
+          "200": { "description": "Orders created (one per supplier)" },
+          "400": { "description": "Validation error" }
+        }
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "get": {
+        "tags": ["orders"],
+        "summary": "Get buyer's order detail",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Order detail", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/v1/orders/{id}/cancel": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Cancel a pending/confirmed order",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Order cancelled" },
+          "409": { "description": "Invalid status transition" }
+        }
+      }
+    },
+    "/api/v1/orders/{id}/reorder": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Reorder a previous order",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "New orders created" },
+          "404": { "description": "Original order not found" }
+        }
+      }
+    },
+    "/api/v1/supplier/orders": {
+      "get": {
+        "tags": ["orders"],
+        "summary": "List incoming orders (supplier only)",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "confirmed", "dispatched", "delivered", "cancelled"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Order list" },
+          "403": { "description": "Supplier role required" }
+        }
+      }
+    },
+    "/api/v1/supplier/orders/{id}": {
+      "get": {
+        "tags": ["orders"],
+        "summary": "Get incoming order detail (supplier only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Order detail" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/v1/supplier/orders/{id}/confirm": {
+      "patch": {
+        "tags": ["orders"],
+        "summary": "Confirm a pending order",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Order confirmed" },
+          "409": { "description": "Invalid status" }
+        }
+      }
+    },
+    "/api/v1/supplier/orders/{id}/dispatch": {
+      "patch": {
+        "tags": ["orders"],
+        "summary": "Dispatch a confirmed order",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Order dispatched" },
+          "409": { "description": "Invalid status" }
+        }
+      }
+    },
+    "/api/v1/supplier/orders/{id}/deliver": {
+      "patch": {
+        "tags": ["orders"],
+        "summary": "Mark a dispatched order as delivered",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Order delivered" },
+          "409": { "description": "Invalid status" }
+        }
+      }
+    },
+    "/api/v1/invoices/{id}": {
+      "get": {
+        "tags": ["invoices"],
+        "summary": "Get invoice details",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Invoice detail" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/api/v1/invoices/{id}/pdf": {
+      "get": {
+        "tags": ["invoices"],
+        "summary": "Download invoice PDF",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "PDF file", "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } } }
+        }
+      }
+    },
+    "/api/v1/uploads/image": {
+      "post": {
+        "tags": ["uploads"],
+        "summary": "Upload a product image (supplier only)",
+        "requestBody": {
+          "required": true,
+          "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" } }, "required": ["file"] } } }
+        },
+        "responses": {
+          "200": { "description": "Upload URL returned" },
+          "400": { "description": "Invalid file type or size" }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Health check",
+        "security": [],
+        "responses": { "200": { "description": "Service is healthy" } }
+      }
+    },
+    "/health/deps": {
+      "get": {
+        "tags": ["system"],
+        "summary": "Dependency health check (Postgres, Redis, Meilisearch)",
+        "security": [],
+        "responses": { "200": { "description": "All dependencies healthy" }, "503": { "description": "One or more dependencies degraded" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthUser": {
+        "type": "object",
+        "required": ["id", "email", "role", "businessName"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["buyer", "supplier", "admin"] },
+          "businessName": { "type": "string" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "required": ["user", "accessToken", "refreshToken", "expiresIn"],
+        "properties": {
+          "user": { "$ref": "#/components/schemas/AuthUser" },
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "expiresIn": { "type": "integer", "description": "Access token TTL in seconds" }
+        }
+      },
+      "RefreshResponse": {
+        "type": "object",
+        "required": ["accessToken", "refreshToken", "expiresIn"],
+        "properties": {
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "expiresIn": { "type": "integer" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "details": { "type": "object", "additionalProperties": true }
+            }
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "required": ["id", "name", "slug"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "parentId": { "type": ["string", "null"] },
+          "children": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "required": ["id", "supplierId", "categoryId", "name", "sku", "unit", "price", "currency", "minOrderQty", "leadTimeDays", "stockAvailable", "archived"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "supplierId": { "type": "string", "format": "uuid" },
+          "categoryId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "unit": { "type": "string", "enum": ["kg", "l", "case", "box", "unit"] },
+          "price": { "type": "integer", "description": "Price in minor units (cents/millimes)" },
+          "currency": { "type": "string" },
+          "minOrderQty": { "type": "integer" },
+          "leadTimeDays": { "type": "integer" },
+          "stockAvailable": { "type": "boolean" },
+          "images": { "type": "array", "items": { "type": "string" } },
+          "archived": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProductList": {
+        "type": "object",
+        "required": ["items", "total", "page", "limit", "totalPages"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "totalPages": { "type": "integer" }
+        }
+      },
+      "CreateProductInput": {
+        "type": "object",
+        "required": ["name", "sku", "categoryId", "unit", "price"],
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "categoryId": { "type": "string", "format": "uuid" },
+          "unit": { "type": "string", "enum": ["kg", "l", "case", "box", "unit"] },
+          "price": { "type": "integer" },
+          "currency": { "type": "string", "default": "TND" },
+          "minOrderQty": { "type": "integer", "default": 1 },
+          "leadTimeDays": { "type": "integer", "default": 1 },
+          "stockAvailable": { "type": "boolean", "default": true },
+          "description": { "type": "string" },
+          "images": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpdateProductInput": {
+        "type": "object",
+        "description": "At least one field required",
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "categoryId": { "type": "string", "format": "uuid" },
+          "unit": { "type": "string", "enum": ["kg", "l", "case", "box", "unit"] },
+          "price": { "type": "integer" },
+          "currency": { "type": "string" },
+          "minOrderQty": { "type": "integer" },
+          "leadTimeDays": { "type": "integer" },
+          "stockAvailable": { "type": "boolean" },
+          "description": { "type": "string" },
+          "images": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "OrderItem": {
+        "type": "object",
+        "required": ["id", "productId", "quantity", "unitPrice", "subtotal"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "productId": { "type": "string", "format": "uuid" },
+          "quantity": { "type": "integer" },
+          "unitPrice": { "type": "integer" },
+          "subtotal": { "type": "integer" },
+          "product": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "sku": { "type": "string" } } }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "required": ["id", "buyerId", "supplierId", "status", "totalAmount", "currency"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "buyerId": { "type": "string", "format": "uuid" },
+          "supplierId": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["pending", "confirmed", "dispatched", "delivered", "cancelled"] },
+          "totalAmount": { "type": "integer" },
+          "currency": { "type": "string" },
+          "notes": { "type": ["string", "null"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "confirmedAt": { "type": ["string", "null"], "format": "date-time" },
+          "dispatchedAt": { "type": ["string", "null"], "format": "date-time" },
+          "deliveredAt": { "type": ["string", "null"], "format": "date-time" },
+          "cancelledAt": { "type": ["string", "null"], "format": "date-time" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/OrderItem" } }
+        }
+      },
+      "OrderList": {
+        "type": "object",
+        "required": ["items", "total", "page", "limit"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "totalPages": { "type": "integer" }
+        }
+      },
+      "CreateOrderInput": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["productId", "quantity"],
+              "properties": {
+                "productId": { "type": "string", "format": "uuid" },
+                "quantity": { "type": "integer", "minimum": 1 }
+              }
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      },
+      "SupplierProfile": {
+        "type": "object",
+        "required": ["id", "businessName"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "businessName": { "type": "string" },
+          "email": { "type": "string" },
+          "logoUrl": { "type": ["string", "null"] },
+          "phone": { "type": ["string", "null"] },
+          "address": { "type": ["string", "null"] }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "required": ["id", "orderId", "invoiceNumber", "issuedAt", "dueDate", "status"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "orderId": { "type": "string", "format": "uuid" },
+          "invoiceNumber": { "type": "string" },
+          "issuedAt": { "type": "string", "format": "date-time" },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["unpaid", "paid", "overdue"] },
+          "pdfUrl": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

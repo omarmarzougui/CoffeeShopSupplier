@@ -3,6 +3,7 @@ import { db } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
 import { ensureInvoiceForOrder } from "./invoice-service.js";
 import { notifyBuyerOrderStatus } from "./notification-service.js";
+import { recordAudit } from "./audit-service.js";
 import type { ListOrdersQuery } from "../schemas/order-schemas.js";
 
 const ORDER_NOT_FOUND = new AppError(404, "ORDER_NOT_FOUND", "Order not found");
@@ -95,6 +96,16 @@ async function transition(
     where: { id: order.id },
     data: { status: to, ...timestamps },
   });
+
+  const actionMap: Partial<Record<OrderStatus, "ORDER_CONFIRMED" | "ORDER_DISPATCHED" | "ORDER_DELIVERED">> = {
+    confirmed: "ORDER_CONFIRMED",
+    dispatched: "ORDER_DISPATCHED",
+    delivered: "ORDER_DELIVERED",
+  };
+  const auditAction = actionMap[to];
+  if (auditAction) {
+    recordAudit({ action: auditAction, entityType: "order", entityId: order.id, metadata: { supplierId, previousStatus: order.status } }).catch(() => {});
+  }
 
   if (to === "confirmed" || to === "dispatched" || to === "delivered") {
     await notifyBuyerOrderStatus(order.id, to).catch(() => {

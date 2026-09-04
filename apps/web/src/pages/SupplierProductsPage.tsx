@@ -6,9 +6,11 @@ import {
   createProduct,
   fetchCategories,
   fetchProducts,
+  updateProduct,
 } from "../lib/catalog";
 import { useAuthStore } from "../stores/auth-store";
 import type { ProductUnit } from "@coffee/types";
+import type { ProductListItem } from "../lib/catalog";
 
 const UNITS: ProductUnit[] = ["kg", "l", "case", "box", "unit"];
 
@@ -25,10 +27,26 @@ const EMPTY_FORM = {
   description: "",
 };
 
+function productToForm(p: ProductListItem) {
+  return {
+    name: p.name,
+    sku: p.sku,
+    categoryId: p.categoryId,
+    unit: p.unit,
+    price: String(p.price / 1000),
+    currency: p.currency,
+    minOrderQty: String(p.minOrderQty),
+    leadTimeDays: String(p.leadTimeDays),
+    stockAvailable: p.stockAvailable,
+    description: p.description ?? "",
+  };
+}
+
 export function SupplierProductsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -61,6 +79,21 @@ export function SupplierProductsPage() {
     setSuccess(null);
   };
 
+  const resetForm = () => {
+    setForm({ ...EMPTY_FORM, categoryId: categories?.[0]?.id ?? "" });
+    setEditingId(null);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const startEdit = (p: ProductListItem) => {
+    setForm(productToForm(p));
+    setEditingId(p.id);
+    setError(null);
+    setSuccess(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -78,23 +111,39 @@ export function SupplierProductsPage() {
 
     setSubmitting(true);
     try {
-      await createProduct({
-        name: form.name.trim(),
-        sku: form.sku.trim(),
-        categoryId: form.categoryId,
-        unit: form.unit,
-        price,
-        currency: form.currency,
-        minOrderQty: Math.max(1, Number(form.minOrderQty) || 1),
-        leadTimeDays: Math.max(0, Number(form.leadTimeDays) || 0),
-        stockAvailable: form.stockAvailable,
-        description: form.description.trim() || undefined,
-      });
-      setForm({ ...EMPTY_FORM, categoryId: form.categoryId });
-      setSuccess("Product added successfully.");
+      if (editingId) {
+        await updateProduct(editingId, {
+          name: form.name.trim(),
+          sku: form.sku.trim(),
+          categoryId: form.categoryId,
+          unit: form.unit,
+          price,
+          currency: form.currency,
+          minOrderQty: Math.max(1, Number(form.minOrderQty) || 1),
+          leadTimeDays: Math.max(0, Number(form.leadTimeDays) || 0),
+          stockAvailable: form.stockAvailable,
+          description: form.description.trim() || undefined,
+        });
+        setSuccess("Product updated successfully.");
+      } else {
+        await createProduct({
+          name: form.name.trim(),
+          sku: form.sku.trim(),
+          categoryId: form.categoryId,
+          unit: form.unit,
+          price,
+          currency: form.currency,
+          minOrderQty: Math.max(1, Number(form.minOrderQty) || 1),
+          leadTimeDays: Math.max(0, Number(form.leadTimeDays) || 0),
+          stockAvailable: form.stockAvailable,
+          description: form.description.trim() || undefined,
+        });
+        setSuccess("Product added successfully.");
+      }
+      resetForm();
       await queryClient.invalidateQueries({ queryKey: ["supplier-products"] });
     } catch (err) {
-      setError((err as Error).message || "Failed to add product.");
+      setError((err as Error).message || "Failed to save product.");
     } finally {
       setSubmitting(false);
     }
@@ -103,6 +152,7 @@ export function SupplierProductsPage() {
   const handleArchive = async (id: string) => {
     try {
       await archiveProduct(id);
+      if (editingId === id) resetForm();
       await queryClient.invalidateQueries({ queryKey: ["supplier-products"] });
     } catch (err) {
       setError((err as Error).message || "Failed to archive product.");
@@ -132,7 +182,20 @@ export function SupplierProductsPage() {
         onSubmit={handleSubmit}
         className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm"
       >
-        <h2 className="mb-4 text-lg font-semibold text-stone-800">Add a new product</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-stone-800">
+            {editingId ? "Edit product" : "Add a new product"}
+          </h2>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-sm text-stone-500 underline hover:text-stone-700"
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-stone-700">Name</label>
@@ -245,7 +308,9 @@ export function SupplierProductsPage() {
           disabled={submitting}
           className="mt-4 rounded-lg bg-amber-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
         >
-          {submitting ? "Adding..." : "Add product"}
+          {submitting
+            ? editingId ? "Updating..." : "Adding..."
+            : editingId ? "Update product" : "Add product"}
         </button>
       </form>
 
@@ -268,7 +333,7 @@ export function SupplierProductsPage() {
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {productsData.items.map((p) => (
-                  <tr key={p.id}>
+                  <tr key={p.id} className={editingId === p.id ? "bg-amber-50" : undefined}>
                     <td className="px-4 py-3 font-medium text-stone-800">{p.name}</td>
                     <td className="px-4 py-3 text-stone-600">{p.sku}</td>
                     <td className="px-4 py-3 text-stone-600">{p.unit}</td>
@@ -284,14 +349,22 @@ export function SupplierProductsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right space-x-2">
                       {!p.archived && (
-                        <button
-                          onClick={() => handleArchive(p.id)}
-                          className="text-xs text-stone-500 hover:text-red-600"
-                        >
-                          Archive
-                        </button>
+                        <>
+                          <button
+                            onClick={() => startEdit(p)}
+                            className="text-xs text-amber-700 hover:text-amber-900"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleArchive(p.id)}
+                            className="text-xs text-stone-500 hover:text-red-600"
+                          >
+                            Archive
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>

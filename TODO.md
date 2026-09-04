@@ -84,6 +84,21 @@
 - [x] **W17. QA hardening**
   - Integration test pass on critical flows; fix bugs; staging deployment
 
+### Audit fixes (2026-09-04) — from 12-section project audit (8.2/10)
+
+All 10 recommended fixes implemented & verified. Details in `PROGRESS.md` 2026-09-04 entry.
+
+- [x] **A1. OpenAPI spec generation** — `docs/api/openapi.json` (3.1) + Swagger UI at `/docs`
+- [x] **A2. Real DB integration tests** — `test:integration` script, Postgres service in CI
+- [x] **A3. Email verification endpoint** — `POST /api/v1/auth/verify` + `verificationTokenHash`
+- [x] **A4. Persistent scheduler** — node-cron (configurable `OVERDUE_JOB_CRON`) + graceful shutdown
+- [x] **A5. Audit logging** — AuditLog model/enum + `audit-service.ts` wired into order flows
+- [x] **A6. E2E browser tests** — Playwright `e2e/happy-path.spec.ts`
+- [x] **A7. Accessibility (Lighthouse/axe)** — `@axe-core/playwright` audits in E2E
+- [x] **A8. Supplier product edit UI** — edit mode in `SupplierProductsPage.tsx`
+- [x] **A9. Product image file upload** — S3/R2 `POST /api/v1/uploads/image` (multipart)
+- [x] **A10. Cookie-based auth migration** — dual-mode httpOnly cookie (`COOKIE_AUTH_ENABLED`)
+
 ### Week 10 — QA & Stabilization
 
 - [ ] **W18. Internal QA, bug fixes, staging deployment**

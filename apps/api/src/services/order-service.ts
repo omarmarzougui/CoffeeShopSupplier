@@ -2,6 +2,7 @@ import type { Order, OrderItem, OrderStatus } from "@prisma/client";
 import { db } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
 import { notifySupplierOrderPlaced } from "./notification-service.js";
+import { recordAudit } from "./audit-service.js";
 import type { CreateOrdersInput, ListOrdersQuery } from "../schemas/order-schemas.js";
 
 interface CreateOrderResult {
@@ -93,6 +94,7 @@ export async function createOrders(
     });
 
     orders.push(order.created);
+    recordAudit({ action: "ORDER_CREATED", entityType: "order", entityId: order.created.id, metadata: { buyerId, supplierId, totalAmount: order.created.totalAmount, currency: order.created.currency } }).catch(() => {});
     if (order.supplier) {
       await notifySupplierOrderPlaced(order.created.id);
     }
@@ -164,6 +166,7 @@ export async function cancelBuyerOrder(buyerId: string, orderId: string): Promis
     where: { id: order.id },
     data: { status: "cancelled", cancelledAt: new Date() },
   });
+  recordAudit({ action: "ORDER_CANCELLED", entityType: "order", entityId: order.id, metadata: { buyerId, previousStatus: order.status } }).catch(() => {});
   return cancelled;
 }
 

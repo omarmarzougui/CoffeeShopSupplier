@@ -9,13 +9,14 @@ import { startOverdueInvoicesJob } from "./jobs/overdue-invoices.js";
 
 const app = await buildApp();
 app.log.info("api starting");
-startOverdueInvoicesJob();
+const overdueJob = startOverdueInvoicesJob();
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
+    overdueJob.stop();
     await app.close();
     await db.$disconnect();
     process.exit(0);

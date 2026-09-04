@@ -30,6 +30,11 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
+export const verifySchema = z.object({
+  email: z.string().email(),
+  token: z.string().min(1),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 
@@ -54,6 +59,7 @@ export async function registerUser(input: RegisterInput) {
   }
 
   const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationTokenHash = hashToken(verificationToken);
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
 
   const user = await db.user.create({
@@ -65,13 +71,14 @@ export async function registerUser(input: RegisterInput) {
       phone: input.phone,
       address: input.address,
       vatId: input.vatId,
+      verificationTokenHash,
     },
   });
 
   await sendEmail(
     user.email,
     "Verify your email",
-    `<p>Welcome to CoffeeShopSupplier! Verify your account:</p><p><code>${verificationToken}</code></p>`,
+    `<p>Welcome to CoffeeShopSupplier! Verify your account by entering the code below:</p><p><code>${verificationToken}</code></p>`,
   );
 
   const tokens = await issueTokens(user);
@@ -136,6 +143,29 @@ export async function logoutUser(refreshToken: string) {
     where: { tokenHash, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+}
+
+export async function verifyEmail(input: z.infer<typeof verifySchema>) {
+  const user = await db.user.findUnique({ where: { email: input.email } });
+  if (!user) {
+    throw new AppError(400, "VERIFY_FAILED", "Unable to verify email");
+  }
+  if (user.verifiedAt) {
+    return { success: true, user: toSafeUser(user) };
+  }
+  if (!user.verificationTokenHash || user.verificationTokenHash !== hashToken(input.token)) {
+    throw new AppError(401, "INVALID_VERIFICATION_TOKEN", "Verification token is invalid or expired");
+  }
+
+  const updated = await db.user.update({
+    where: { id: user.id },
+    data: { verifiedAt: new Date(), verificationTokenHash: null },
+  });
+  return { success: true, user: toSafeUser(updated) };
+}
+
+function toSafeUser(user: User): SafeUser {
+  return { id: user.id, email: user.email, role: user.role, businessName: user.businessName };
 }
 
 export type SafeUser = { id: string; email: string; role: Role; businessName: string };

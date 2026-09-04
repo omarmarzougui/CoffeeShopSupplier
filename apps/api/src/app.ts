@@ -1,12 +1,17 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
+import cookie from "@fastify/cookie";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { checkDependencies } from "./lib/health.js";
 import { redis } from "./lib/redis.js";
 import { ensureProductIndex } from "./lib/search.js";
 import { authRoutes } from "./routes/auth-routes.js";
 import { categoryRoutes } from "./routes/category-routes.js";
 import { invoiceRoutes } from "./routes/invoice-routes.js";
+import { uploadRoutes } from "./routes/upload-routes.js";
 import { orderRoutes } from "./routes/order-routes.js";
 import { productRoutes } from "./routes/product-routes.js";
 import { supplierOrderRoutes } from "./routes/supplier-order-routes.js";
@@ -20,6 +25,34 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: process.env.WEB_ORIGIN?.split(",") ?? true,
   });
+  await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
+  await app.register(cookie);
+
+  if (process.env.ENABLE_API_DOCS !== "false") {
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: "CoffeeShopSupplier API",
+          description: "B2B marketplace connecting coffee shop buyers with product suppliers. Full spec: /docs/openapi.json",
+          version: "1.0.0",
+        },
+        servers: [{ url: process.env.API_PUBLIC_URL ?? "http://localhost:3000" }],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              bearerFormat: "JWT",
+            },
+          },
+        },
+      },
+    });
+    await app.register(swaggerUi, {
+      routePrefix: "/docs",
+      staticCSP: true,
+    });
+  }
 
   registerErrorHandler(app);
 
@@ -44,6 +77,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(orderRoutes);
   await app.register(supplierOrderRoutes);
   await app.register(invoiceRoutes);
+  await app.register(uploadRoutes);
 
   app.addHook("onClose", async () => {
     if (redis.status === "ready" || redis.status === "connecting") {

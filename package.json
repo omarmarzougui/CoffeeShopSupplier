@@ -14,12 +14,17 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:lighthouse": "lhci autorun || echo 'lhci not configured — run npx lhci wizard'",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:seed": "pnpm --filter @coffee/api db:seed"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.30.0",
+    "@playwright/test": "^1.62.1",
     "@prisma/client": "^6.19.3",
     "eslint": "^9.30.0",
     "eslint-config-prettier": "^10.1.5",

@@ -1,3 +1,4 @@
+import cron from "node-cron";
 import { db } from "../lib/db.js";
 import { notifyBuyerInvoiceOverdue } from "../services/notification-service.js";
 
@@ -22,8 +23,17 @@ export async function runOverdueInvoicesJob(): Promise<number> {
   return result.count;
 }
 
-export function startOverdueInvoicesJob(maxWaitMs = DAY_MS): NodeJS.Timeout {
-  const tick = async () => {
+// Cron expression is configurable via env (default: daily at 02:00 server time).
+// Enables switching the schedule without a code change and pairs with an external
+// scheduler (e.g. Kubernetes CronJob calling the same routine).
+const DEFAULT_SCHEDULE = "0 2 * * *";
+
+export function startOverdueInvoicesJob(
+  _maxWaitMs = DAY_MS,
+  schedule = process.env.OVERDUE_JOB_CRON ?? DEFAULT_SCHEDULE,
+): { stop: () => void } {
+  // Run once on startup to catch any invoices that crossed their due date while down.
+  const initial = async () => {
     try {
       const count = await runOverdueInvoicesJob();
       if (count > 0) {
@@ -33,6 +43,23 @@ export function startOverdueInvoicesJob(maxWaitMs = DAY_MS): NodeJS.Timeout {
       console.error("[overdue-invoices] job failed", err);
     }
   };
-  void tick();
-  return setInterval(tick, maxWaitMs);
+  void initial();
+
+  if (!cron.validate(schedule)) {
+    console.error(`[overdue-invoices] invalid cron schedule "${schedule}", falling back to daily`);
+    schedule = DEFAULT_SCHEDULE;
+  }
+
+  const task = cron.schedule(schedule, async () => {
+    try {
+      const count = await runOverdueInvoicesJob();
+      if (count > 0) {
+        console.log(`[overdue-invoices] marked ${count} invoice(s) overdue`);
+      }
+    } catch (err) {
+      console.error("[overdue-invoices] job failed", err);
+    }
+  });
+
+  return { stop: () => task.stop() };
 }
